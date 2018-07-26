@@ -21,14 +21,8 @@ const uint8_t isaResetPin = 8;  // nc
 ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLoadPin,
               isaWritePin, isaReadPin, isaResetPin);
 
-//ISAPlugAndPlay pnp(isaBus);
+ISAPlugAndPlay pnp(isaBus);
 
-const uint8_t key[32] PROGMEM = {
-    0xb1, 0xd8, 0x6c, 0x36, 0x9b, 0x4d, 0xa6, 0xd3,
-    0x69, 0xb4, 0x5a, 0xad, 0xd6, 0xeb, 0x75, 0xba,
-    0xdd, 0xee, 0xf7, 0x7b, 0x3d, 0x9e, 0xcf, 0x67,
-    0x33, 0x19, 0x8c, 0x46, 0xa3, 0x51, 0xa8, 0x54
-};
 
 void pnp_write(
   byte reg,
@@ -43,11 +37,19 @@ void pnp_write(
 void setup()
 {
     int i;
+
+    const uint8_t key[32] = {
+        0xb1, 0xd8, 0x6c, 0x36, 0x9b, 0x4d, 0xa6, 0xd3,
+        0x69, 0xb4, 0x5a, 0xad, 0xd6, 0xeb, 0x75, 0xba,
+        0xdd, 0xee, 0xf7, 0x7b, 0x3d, 0x9e, 0xcf, 0x67,
+        0x33, 0x19, 0x8c, 0x46, 0xa3, 0x51, 0xa8, 0x54
+    };
+
     Serial.begin(9600);
 
     delay(1000);
     Serial.println("Starting");
-/*
+
     pnp.reset();
     pnp.sendKey(key);
 
@@ -56,60 +58,67 @@ void setup()
     pnp.wake(0x81);
     pnp.selectLogicalDevice(0);
     pnp.deactivate();
-    Serial.println(pnp.assignAddress(0, 0x0220));
 
-    delay(1000);
-*/
-    
-    pnp_write(0x02, 0x01);
-
-    Serial.println("Sending key");
-    isaBus.write(0x279, 0x00);
-    isaBus.write(0x279, 0x00);
-    for (i = 0; i < 32; ++ i) {
-        isaBus.write(0x0279, key[i]);
-        delay(1);
+    // Sound Blaster
+    if (!pnp.assignAddress(0, 0x0220)) {
+        Serial.println("Failed to assign SB address");
+        return;
     }
 
-    // Set read address 0x0203
-    pnp_write(0x00, 0x203 >> 2);
+    if (!pnp.assignIRQ(2, 5)) {
+        Serial.println("Failed to assign SB IRQ");
+        return;
+    }
 
-    // Wake
-    Serial.println("Wake");
-    pnp_write(0x03, 0x81);
+    if (!pnp.assignDMA(1, 1)) {
+        Serial.println("Failed to assign SB DMA");
+        return;
+    }
 
-    // Select logical device 0
-    pnp_write(0x07, 0x00);
+    // Windows Sound System
+    if (!pnp.assignAddress(0, 0x530)) { // TODO: check me
+        Serial.println("Failed to assign WSS address");
+        return;
+    }
 
-    // Deactivate
-    pnp_write(0x30, 0x00);
+    if (!pnp.assignIRQ(0, 5)) {
+        Serial.println("Failed to assign WSS IRQ");
+        return;
+    }
 
-    // Assign address 0
-    pnp_write(0x60, 0x02);
-    pnp_write(0x61, 0x20);
+    if (!pnp.assignDMA(0, 1)) {
+        Serial.println("Failed to assign WSS DMA");
+        return;
+    }
 
-    Serial.println("Reading return value");
+    // Adlib
+    if (!pnp.assignAddress(2, 0x388)) {
+        Serial.println("Failed to assign Adlib address");
+        return;
+    }
 
-    isaBus.write(0x0279, 0x60);
-    delay(1);
-    Serial.print(isaBus.read(0x0203), HEX);
-    Serial.println("");
+    // MPU-401
+    if (!pnp.assignAddress(3, 0x330)) {
+        Serial.println("Failed to assign MPU-401 address");
+        return;
+    }
 
-    isaBus.write(0x0279, 0x61);
-    delay(1);
-    Serial.print(isaBus.read(0x0203), HEX);
-    Serial.println("");
-    //Serial.println("--------------------------------------");
+    if (!pnp.assignAddress(4, 5)) {
+        Serial.println("Failed to assign MPU-401 IRQ");
+        return;
+    }
+
+    // Control
+    if (!pnp.assignAddress(4, 0x370)) {
+        Serial.println("Failed to assign control address");
+        return;
+    }
+
+    pnp.activate();
+
+    Serial.println("PnP setup complete");
 }
 
 void loop()
 {
-    int i;
-  
-    for (i = 0; i < 256; ++ i) {
-        //isaBus.write(0x279);
-        Serial.print(isaBus.read(0x220), HEX);
-        Serial.println("");
-        delay(2000);
-    }
 }

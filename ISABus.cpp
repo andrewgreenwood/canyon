@@ -47,6 +47,11 @@ void ISABus::write(
     // Put the data shift register into 'shift' mode
     digitalWrite(m_loadPin, LOW);
 
+    //Serial.print("OUT 0x");
+    //Serial.print(address, HEX);
+    //Serial.print(", 0x");
+    //Serial.println(data, HEX);
+
 #ifdef DO_LSB
     // The data goes first so it ends up in the bi-directional shift register
     shiftOut(m_outputPin, m_clockPin, LSBFIRST, data);
@@ -78,6 +83,9 @@ uint8_t ISABus::read(
     uint16_t address) const
 {
     uint8_t data = 0;
+
+    //Serial.print("IN 0x");
+    //Serial.println(address, HEX);
 
 #ifdef DO_LSB
     // Send out the address

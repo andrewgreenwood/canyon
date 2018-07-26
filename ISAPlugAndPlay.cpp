@@ -82,9 +82,6 @@ bool ISAPlugAndPlay::assignAddress(
     write(pnpRegister, addressHigh);
     write(pnpRegister + 1, addressLow);
 
-    Serial.println(read(pnpRegister), HEX);
-    Serial.println(read(pnpRegister + 1), HEX);
-
     return ((read(pnpRegister) == addressHigh)
          && (read(pnpRegister + 1) == addressLow));
 }
@@ -93,12 +90,26 @@ bool ISAPlugAndPlay::assignIRQ(
     uint8_t index,
     uint8_t irq) const
 {
+    uint8_t pnpRegister = 0x70 + index;
+
+    // TODO: Check args
+
+    write(pnpRegister, irq);
+
+    return (read(pnpRegister) == irq);
 }
 
 bool ISAPlugAndPlay::assignDMA(
     uint8_t index,
     uint8_t dma) const
 {
+    uint8_t pnpRegister = 0x74 + index;
+
+    // TODO: Check args
+
+    write(pnpRegister, dma);
+
+    return (read(pnpRegister) == dma);
 }
 
 void ISAPlugAndPlay::write(
@@ -114,9 +125,6 @@ void ISAPlugAndPlay::write(
 uint8_t ISAPlugAndPlay::read(
     uint8_t pnpRegister) const
 {
-    Serial.print("Read address: ");
-    Serial.println(getReadAddress(), HEX);
-
     if (m_packedReadAddress == 0) {
         return 0;
     }
@@ -124,5 +132,5 @@ uint8_t ISAPlugAndPlay::read(
     delayMicroseconds(ioDelay);
     m_isaBus.write(registerAddress, pnpRegister);
     delayMicroseconds(ioDelay);
-    m_isaBus.read(getReadAddress());
+    return m_isaBus.read(getReadAddress());
 }
