@@ -1,3 +1,33 @@
+/*
+    Project:    Canyon
+    Purpose:    ISA Bus Interface
+    Author:     Andrew Greenwood
+    Date:       July 2018
+
+    Use this with 2x shift registers (e.g. SN74HC595) and 1x universal shift
+    register (e.g. SN74ALS299), which will be used for the 16-bit address/port
+    and 8-bit data, respectively.
+
+    The registers need to be wired so that the shifted bits flow like this:
+        outputPin --> 595 A --> 595 B --> 299 --> inputPin
+
+    Reads/writes are in LSB order. When writing, data is shifted out first,
+    followed by the address. The data ends up in the 299. When reading, only
+    the address is shifted out, and the data is loaded into the 299 from the
+    ISA card, before being shifted in.
+
+    Some shortcuts were taken to save on the Arduino pin count:
+    1. Connect RCLK of both 595s to SER of 595 A
+    2. Connect OE pins of all shift registers to GND so they are always LOW
+    3. Connect SRCLR and CLR to +5V so they are always HIGH
+    4. Connect S0 of the 299 shift register to +5V so it is always HIGH
+
+    The clock pins are connected together.
+
+    See the comments for the ISABus constructor arguments regarding the pins
+    that the Arduino is required to connect to.
+*/
+
 #ifndef ISABUS_H
 #define ISABUS_H
 
@@ -10,9 +40,9 @@ class ISABus {
             uint8_t inputPin,   // From final shift register's serial output (Qh')
             uint8_t clockPin,   // Shift clock pin (RCLK,RCLK,CLK)
             uint8_t loadPin,    // To S1 pin of final shift register
-            uint8_t ioWritePin, // To IOW pin of device (active low)
-            uint8_t ioReadPin,  // To IOR pin of device (active low)
-            uint8_t resetPin);  // To RESET pin of device (active low)
+            uint8_t ioWritePin, // To IOW pin of ISA device (active low)
+            uint8_t ioReadPin,  // To IOR pin of ISA device (active low)
+            uint8_t resetPin);  // To RESET pin of ISA device (active low)
 
         void reset() const;
 
