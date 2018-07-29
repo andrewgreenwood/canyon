@@ -69,7 +69,7 @@ void opl3Write(
         printf("midiOutUnprepareHeader - error %u\n", result);
     }
 
-    Sleep(4);
+    //Sleep(4);
 }
 
 
@@ -146,8 +146,6 @@ int main()
         //opl3Write(0, 0xa0, pitch);
         opl3Write(0, 0x83, 0x41);   // Sustain/Release (carrier)
         //opl3Write(0, 0xb0, 0x34);
-
-        Sleep(2);
 
 //        byte_b0 &= 0x1f;
 //        opl3Write(0, 0xb0, byte_b0);

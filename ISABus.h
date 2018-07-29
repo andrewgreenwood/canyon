@@ -17,10 +17,9 @@
     ISA card, before being shifted in.
 
     Some shortcuts were taken to save on the Arduino pin count:
-    1. Connect RCLK of both 595s to SER of 595 A
-    2. Connect OE pins of all shift registers to GND so they are always LOW
-    3. Connect SRCLR and CLR to +5V so they are always HIGH
-    4. Connect S0 of the 299 shift register to +5V so it is always HIGH
+    1. Connect OE pins of all shift registers to GND so they are always LOW
+    2. Connect SRCLR and CLR to +5V so they are always HIGH
+    3. Connect S0 of the 299 shift register to +5V so it is always HIGH
 
     The clock pins are connected together.
 
@@ -38,7 +37,8 @@ class ISABus {
         ISABus(
             uint8_t outputPin,  // To first shift register's serial input (SER)
             uint8_t inputPin,   // From final shift register's serial output (Qh')
-            uint8_t clockPin,   // Shift clock pin (RCLK,RCLK,CLK)
+            uint8_t clockPin,   // Shift clock pin (SRCLK,SRCLK,CLK)
+            uint8_t latchPin,   // Shift register store pin (RCLK,RCLK)
             uint8_t loadPin,    // To S1 pin of final shift register
             uint8_t ioWritePin, // To IOW pin of ISA device (active low)
             uint8_t ioReadPin,  // To IOR pin of ISA device (active low)
@@ -57,6 +57,7 @@ class ISABus {
         uint8_t m_outputPin;
         uint8_t m_inputPin;
         uint8_t m_clockPin;
+        uint8_t m_latchPin;
         uint8_t m_loadPin;
         uint8_t m_ioWritePin;
         uint8_t m_ioReadPin;

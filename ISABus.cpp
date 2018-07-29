@@ -3,6 +3,10 @@
     Purpose:    ISA Bus Interface
     Author:     Andrew Greenwood
     Date:       July 2018
+
+    TODO:
+        Remove bit-banging support (enabled when USE_SPI is not defined)
+        Clean up pins passed to constructor (SPI uses specific pins)
 */
 
 #include <arduino.h>
@@ -10,22 +14,23 @@
 #include "ISABus.h"
 
 #define USE_SPI         1
-#define ISA_IO_WAIT     10000
+#define ISA_IO_WAIT     10
 #define DO_LSB          1
 
 ISABus::ISABus(
     uint8_t outputPin,
     uint8_t inputPin,
     uint8_t clockPin,
+    uint8_t latchPin,
     uint8_t loadPin,
     uint8_t ioWritePin,
     uint8_t ioReadPin,
     uint8_t resetPin)
 : m_outputPin(outputPin), m_inputPin(inputPin), m_clockPin(clockPin),
-  m_loadPin(loadPin), m_ioWritePin(ioWritePin), m_ioReadPin(ioReadPin),
-  m_resetPin(resetPin)
+  m_latchPin(latchPin), m_loadPin(loadPin), m_ioWritePin(ioWritePin),
+  m_ioReadPin(ioReadPin), m_resetPin(resetPin)
 {
-    pinMode(10, OUTPUT);    // slave select pin
+    pinMode(10, OUTPUT);    // SPI slave slect pin (not actually used)
     reset();
 }
 
@@ -48,27 +53,22 @@ void ISABus::reset() const
 
     // Ready to go
     digitalWrite(m_resetPin, LOW);
-
-    SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
-    SPI.transfer(0);
-    SPI.transfer(0);
-    SPI.transfer(0);
-    digitalWrite(7, LOW);
-    digitalWrite(7, HIGH);
-    SPI.endTransaction();
 }
 
 void ISABus::write(
     uint16_t address,
     uint8_t data) const
 {
-    // Put the data shift register into 'shift' mode
-    digitalWrite(m_loadPin, LOW);
-
+#ifdef PRINT_IO
     Serial.print("OUT 0x");
     Serial.print(address, HEX);
     Serial.print(", 0x");
     Serial.println(data, HEX);
+#endif
+    noInterrupts();
+
+    // Put the data shift register into 'shift' mode
+    digitalWrite(m_loadPin, LOW);
 
 #ifdef USE_SPI
     SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
@@ -95,25 +95,20 @@ void ISABus::write(
 #endif
 #endif
 
-    //delay(500);
-
-    // The output pin is wired up to the SRCLK on the 595s as well as the SER
-    // input, so we flip it here to perform a store
-    delay(100);
-    digitalWrite(7, LOW);
-    digitalWrite(7, HIGH);
-
-    delay(100);
+    // Store the data into the 595s we're using for the address
+    digitalWrite(m_latchPin, LOW);
+    digitalWrite(m_latchPin, HIGH);
 
     // Lower the IOW pin on the ISA bus to indicate we're writing data
     digitalWrite(m_ioWritePin, LOW);
-    //for (int wait = 0; wait < ISA_IO_WAIT; ++ wait) {}
     delayMicroseconds(ISA_IO_WAIT);
     digitalWrite(m_ioWritePin, HIGH);
 
 #ifdef USE_SPI
     SPI.endTransaction();
 #endif
+
+    interrupts();
 }
 
 uint8_t ISABus::read(
@@ -121,14 +116,17 @@ uint8_t ISABus::read(
 {
     uint8_t data = 0;
 
+#ifdef PRINT_IO
     Serial.print("IN 0x");
     Serial.print(address, HEX);
     Serial.print(" --> ");
+#endif
+
+    noInterrupts();
 
 #ifdef USE_SPI
     SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
 
-    //SPI.transfer16(address);
     SPI.transfer(address & 0xff);
     SPI.transfer((address & 0xff00) >> 8);
 #else
@@ -143,10 +141,9 @@ uint8_t ISABus::read(
 #endif
 #endif
 
-    // The output pin is wired up to the SRCLK on the 595s as well as the SER
-    // input, so we flip it here to perform a store
-    digitalWrite(7, LOW);
-    digitalWrite(7, HIGH);
+    // Store the data into the 595s we're using for the address
+    digitalWrite(m_latchPin, LOW);
+    digitalWrite(m_latchPin, HIGH);
 
     // Put the data shift register into 'load' mode
     digitalWrite(m_loadPin, HIGH);
@@ -156,7 +153,6 @@ uint8_t ISABus::read(
 
     // Give the device some time to respond
     delayMicroseconds(ISA_IO_WAIT);
-    //for (int wait = 0; wait < ISA_IO_WAIT; ++ wait) {}
 
     // Load the data from the ISA data pins into the universal shift register
 #ifdef USE_SPI
@@ -174,9 +170,7 @@ uint8_t ISABus::read(
 
     SPI.endTransaction();
 #ifdef USE_SPI
-    //SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
     data = SPI.transfer(0);
-//    SPI.endTransaction();
 #else
     // The first bit is immediately available, so get that first
     data = digitalRead(m_inputPin);
@@ -192,6 +186,11 @@ uint8_t ISABus::read(
     digitalWrite(m_clockPin, LOW);
 #endif
 
+    interrupts();
+
+#ifdef PRINT_IO
     Serial.println(data, HEX);
+#endif
+
     return data;
 }

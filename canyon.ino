@@ -13,16 +13,17 @@
 #include "MPU401.h"
 
 const uint8_t mpu401IntPin = 2;
-const uint8_t isaInputPin = 12;
-const uint8_t isaOutputPin = 11;
-const uint8_t isaReadPin = 5;   // nc
+const uint8_t isaReadPin = 5;
 const uint8_t isaLoadPin = 6;
+const uint8_t isaLatchPin = 7;
+const uint8_t isaResetPin = 8;
+const uint8_t isaWritePin = 9;
+const uint8_t isaOutputPin = 11;
+const uint8_t isaInputPin = 12;
 const uint8_t isaClockPin = 13;
-const uint8_t isaResetPin = 8;  // nc
-const uint8_t isaWritePin = 9;  // nc
 
-ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLoadPin,
-              isaWritePin, isaReadPin, isaResetPin);
+ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
+              isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
@@ -43,6 +44,10 @@ void onMPU401Input()
             bufferIndex = 0;
         }
         ++ mpu401Counter;
+
+        if (mpu401Counter > 400) {
+            Serial.println("Hi");
+        }
     }
 }
 
@@ -87,80 +92,9 @@ void setup()
 
     uint8_t data;
 
-    pinMode(7, OUTPUT);
-    #if 0
-    pinMode(13, OUTPUT);
-    for (;;) {
-        SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
+    pinMode(7, OUTPUT);     // Latch pin (595 RCLK)
+    pinMode(13, OUTPUT);    // Clock pin (needed to be set here?)
 
-        //SPI.transfer(0xab);
-        SPI.transfer(0xfe);
-        SPI.transfer(0xfe);
-        //SPI.endTransaction();
-        //SPI.endTransaction();
-
-        // Store
-        //pinMode(7, OUTPUT);
-        digitalWrite(7, LOW);
-        digitalWrite(7, HIGH);
-
-        // Set bidirectional register to LOAD
-        digitalWrite(isaLoadPin, HIGH);
-
-        // Trigger the read
-        digitalWrite(isaReadPin, LOW);
-
-        delay(10);
-
-        // Clock in the data
-        //pinMode(isaClockPin, OUTPUT);
-//        digitalWrite(isaClockPin, LOW);
-//        digitalWrite(isaClockPin, HIGH);
-        //SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
-        SPI.transfer(0);
-        //SPI.endTransaction();
-
-        // End reading
-        digitalWrite(isaReadPin, HIGH);
-
-        // Set bidirectional register to SHIFT
-        digitalWrite(isaLoadPin, LOW);
-
-        /*
-        data = digitalRead(isaInputPin);
-        // Shift the remaining 7 bits in
-        for (int i = 1; i < 8; ++ i) {
-            digitalWrite(isaClockPin, LOW);
-            digitalWrite(isaClockPin, HIGH);
-            data |= digitalRead(isaInputPin) << i;
-        }
-        Serial.println(data, HEX);
-        */
-
-        // Leave the clock pin in a low state
-        //digitalWrite(isaClockPin, LOW);
-
-        //SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
-        for (int j = 0; j < 4; ++ j) {
-            Serial.print(SPI.transfer(0), HEX);
-            Serial.print(' ');
-        }
-        SPI.endTransaction();
-
-        /*
-        for (int j = 0; j < 256; ++ j) {
-            Serial.println(j);
-            isaBus.write(j << 8, 0);
-        }
-        */
-        Serial.print('\n');
-        delay(1000);
-    }
-
-    return; // TODO: REMOVE ME
-    #endif
-
-    pinMode(13, OUTPUT);
     Serial.println(opl3sa.init(0x330, 5, 0x388));
 
     Serial.println("Initialising OPL3");
@@ -261,13 +195,15 @@ void old_loop()
 void loop()
 {
     uint8_t data;
-    
+
+#if 0    
     uint16_t fnum;
     uint8_t block;
     uint8_t byte_b0;
 
     startTime = micros();
 
+    for (int i = 0; i < 1000; ++ i) {
     for (note = 0; note < 96; ++ note) {
     calcFrequencyAndBlock(note, &fnum, &block);
 
@@ -279,10 +215,11 @@ void loop()
     //opl3Write(0, 0xa0, pitch);
     //opl3Write(true, 0x8f, 0x41);   // Sustain/Release (carrier)
     }
+    }
     
     endTime = micros();
 
-    Serial.println((endTime - startTime));
+    Serial.println((endTime - startTime) / 1000);
     
     //byte_b0 &= 0x1f;
     //opl3Write(0, 0xb0, byte_b0);
@@ -299,9 +236,10 @@ void loop()
     */
 
     return;
+#endif
 
     while (bufferInputIndex != bufferIndex) {
-        digitalWrite(13, HIGH);
+//        digitalWrite(13, HIGH);
         data = buffer[bufferInputIndex];
         if (data == 0xf0) {
             inSysEx = true;
@@ -347,7 +285,7 @@ void loop()
 
         -- mpu401Counter;
     }
-    digitalWrite(13, LOW);
+    //digitalWrite(13, LOW);
 
     return;
 #if 0
