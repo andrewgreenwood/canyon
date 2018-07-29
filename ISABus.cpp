@@ -168,9 +168,9 @@ uint8_t ISABus::read(
     // Put the data shift register into 'shift' mode
     digitalWrite(m_loadPin, LOW);
 
-    SPI.endTransaction();
 #ifdef USE_SPI
     data = SPI.transfer(0);
+    SPI.endTransaction();
 #else
     // The first bit is immediately available, so get that first
     data = digitalRead(m_inputPin);
