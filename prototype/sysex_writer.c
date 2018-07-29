@@ -69,7 +69,7 @@ void opl3Write(
         printf("midiOutUnprepareHeader - error %u\n", result);
     }
 
-    Sleep(50);
+    Sleep(4);
 }
 
 
@@ -116,7 +116,6 @@ int main()
 
     printf("Wait --> %d\n", WaitForSingleObject(event, INFINITE));
 
-    #if 0
     // Reset everything!
     int i;
     for (i = 0x20; i <= 0xff; ++ i) {
@@ -148,7 +147,7 @@ int main()
         opl3Write(0, 0x83, 0x41);   // Sustain/Release (carrier)
         //opl3Write(0, 0xb0, 0x34);
 
-        Sleep(100);
+        Sleep(2);
 
 //        byte_b0 &= 0x1f;
 //        opl3Write(0, 0xb0, byte_b0);
@@ -182,8 +181,8 @@ int main()
         //opl3Write(0, 0xa0, 0xff);
         //Sleep(200);
     }
-    #endif
 
+    /*
     int j;
     for (;;) {
         printf("Sending\n");
@@ -192,6 +191,7 @@ int main()
         }
         Sleep(100);
     }
+    */
 
 
     result = midiOutClose(handle);

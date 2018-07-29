@@ -13,11 +13,11 @@
 #include "MPU401.h"
 
 const uint8_t mpu401IntPin = 2;
-const uint8_t isaInputPin = 3;
-const uint8_t isaOutputPin = 4;
+const uint8_t isaInputPin = 12;
+const uint8_t isaOutputPin = 11;
 const uint8_t isaReadPin = 5;   // nc
 const uint8_t isaLoadPin = 6;
-const uint8_t isaClockPin = 7;
+const uint8_t isaClockPin = 13;
 const uint8_t isaResetPin = 8;  // nc
 const uint8_t isaWritePin = 9;  // nc
 
@@ -35,7 +35,6 @@ void onMPU401Input()
 {
     uint8_t data;
 
-    digitalWrite(13, HIGH);
     while (mpu401.canRead()) {
         data = mpu401.readData();
         buffer[bufferIndex ++] = data;
@@ -45,28 +44,146 @@ void onMPU401Input()
         }
         ++ mpu401Counter;
     }
-    digitalWrite(13, LOW);
-
-    /*
-    Serial.println("MPU-401 input available");
-    while (mpu401.canRead()) {
-        digitalWrite(13, HIGH);
-        Serial.println(mpu401.readData(), HEX);
-        digitalWrite(13, LOW);
-    }
-    Serial.println("end of MPU-401 data");
-    */
 }
+
+// Frequencies of notes within each block
+const uint16_t freqBlockTable[12] = {
+    0x157, 0x16b, 0x181, 0x198, 0x1b0, 0x1ca, 0x1e5, 0x202, 0x220, 0x241, 0x263, 0x287
+};
+
+const uint16_t lowestFrequency = 0x156;
+const uint16_t highestFrequency = 0x2ae;
+
+void calcFrequencyAndBlock(
+    uint8_t note,
+    uint16_t *frequency,
+    uint8_t *block)
+{
+    // Maximum note
+    if (note > 95) {
+        return;
+    }
+
+    *block = note / 12;
+    *frequency = freqBlockTable[note % 12];
+}
+
+void opl3Write(
+    bool primary,
+    uint8_t reg,
+    uint8_t data)
+{
+    uint16_t basePort = primary ? 0x388 : 0x38a;
+
+    isaBus.write(basePort, reg);
+    isaBus.write(basePort + 1, data);
+}
+
+#include <SPI.h>
 
 void setup()
 {
     Serial.begin(9600);
-    delay(1000);
-    Serial.println(opl3sa.init(0x330, 5, 0x388));
-    mpu401.init(0x330);
-    Serial.println(mpu401.reset());
+
+    uint8_t data;
+
+    pinMode(7, OUTPUT);
+    #if 0
+    pinMode(13, OUTPUT);
+    for (;;) {
+        SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
+
+        //SPI.transfer(0xab);
+        SPI.transfer(0xfe);
+        SPI.transfer(0xfe);
+        //SPI.endTransaction();
+        //SPI.endTransaction();
+
+        // Store
+        //pinMode(7, OUTPUT);
+        digitalWrite(7, LOW);
+        digitalWrite(7, HIGH);
+
+        // Set bidirectional register to LOAD
+        digitalWrite(isaLoadPin, HIGH);
+
+        // Trigger the read
+        digitalWrite(isaReadPin, LOW);
+
+        delay(10);
+
+        // Clock in the data
+        //pinMode(isaClockPin, OUTPUT);
+//        digitalWrite(isaClockPin, LOW);
+//        digitalWrite(isaClockPin, HIGH);
+        //SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
+        SPI.transfer(0);
+        //SPI.endTransaction();
+
+        // End reading
+        digitalWrite(isaReadPin, HIGH);
+
+        // Set bidirectional register to SHIFT
+        digitalWrite(isaLoadPin, LOW);
+
+        /*
+        data = digitalRead(isaInputPin);
+        // Shift the remaining 7 bits in
+        for (int i = 1; i < 8; ++ i) {
+            digitalWrite(isaClockPin, LOW);
+            digitalWrite(isaClockPin, HIGH);
+            data |= digitalRead(isaInputPin) << i;
+        }
+        Serial.println(data, HEX);
+        */
+
+        // Leave the clock pin in a low state
+        //digitalWrite(isaClockPin, LOW);
+
+        //SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
+        for (int j = 0; j < 4; ++ j) {
+            Serial.print(SPI.transfer(0), HEX);
+            Serial.print(' ');
+        }
+        SPI.endTransaction();
+
+        /*
+        for (int j = 0; j < 256; ++ j) {
+            Serial.println(j);
+            isaBus.write(j << 8, 0);
+        }
+        */
+        Serial.print('\n');
+        delay(1000);
+    }
+
+    return; // TODO: REMOVE ME
+    #endif
 
     pinMode(13, OUTPUT);
+    Serial.println(opl3sa.init(0x330, 5, 0x388));
+
+    Serial.println("Initialising OPL3");
+    for (int i = 0; i <= 0xff; ++ i) {
+        isaBus.write(0x388, i);
+        isaBus.write(0x389, 0);
+        isaBus.write(0x38a, i);
+        isaBus.write(0x38b, 0);
+    }
+
+    opl3Write(true, 0x20, 0x01);
+    opl3Write(true, 0x40, 0x18);
+    opl3Write(true, 0x60, 0xf0);   // Attack/Decay
+    opl3Write(true, 0x80, 0x77);   // Sustain/Release
+    opl3Write(true, 0xa0, 0x98);
+    opl3Write(true, 0x23, 0x01);
+    opl3Write(true, 0x43, 0x00);
+    opl3Write(true, 0x63, 0xf0);   // Attack/Decay
+
+    Serial.println("Done initialising OPL3");
+
+    mpu401.init(0x330);
+    Serial.println(mpu401.reset());
 
     pinMode(mpu401IntPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(mpu401IntPin), onMPU401Input, RISING);
@@ -96,10 +213,6 @@ void printHex(
     Serial.print(data, HEX);
 }
 
-uint8_t currentStatus = 0;
-int length = 0;
-int expectedLength = 0;
-bool inSysEx = false;
 uint8_t sysExData[7];
 
 void handleSysEx()
@@ -111,61 +224,133 @@ void handleSysEx()
     basePort = (sysExData[2] & 0x80) ? 0x38a : 0x388;
     reg = (sysExData[2] << 4) | sysExData[3];
     data = (sysExData[4] << 4) | sysExData[5];
-
+/*
     Serial.print("Writing: ");
     Serial.print(basePort, HEX);
     Serial.print(" ");
     Serial.print(reg, HEX);
     Serial.print(" ");
     Serial.println(data, HEX);
-
+*/
     isaBus.write(basePort, reg);
-    delay(1);
+    //delay(1);
     isaBus.write(basePort + 1, data);
-    delay(1);
+    //delay(1);
 }
 
 int bufferInputIndex = 0;
 
-int col = 2;
+bool inSysEx = false;
+int midiIndex = 0;
+
+uint8_t note = 0;
+int counter = 0;
+unsigned long startTime, endTime;
+
+void old_loop()
+{
+    startTime = micros();
+    isaBus.write(0x388, 01);
+    endTime = micros();
+
+    Serial.println(endTime - startTime);
+
+    delay(100);
+}
 
 void loop()
 {
-    //Serial.println(mpu401Counter);
+    uint8_t data;
+    
+    uint16_t fnum;
+    uint8_t block;
+    uint8_t byte_b0;
 
-    if (bufferInputIndex != bufferIndex) {
-        Serial.println("--- mark ---");
+    startTime = micros();
+
+    for (note = 0; note < 96; ++ note) {
+    calcFrequencyAndBlock(note, &fnum, &block);
+
+    byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
+
+    opl3Write(true, 0xa0, fnum);
+    opl3Write(true, 0xb0, byte_b0);
+
+    //opl3Write(0, 0xa0, pitch);
+    //opl3Write(true, 0x8f, 0x41);   // Sustain/Release (carrier)
+    }
+    
+    endTime = micros();
+
+    Serial.println((endTime - startTime));
+    
+    //byte_b0 &= 0x1f;
+    //opl3Write(0, 0xb0, byte_b0);
+
+    /*
+    if (counter % 6) {
+        delay(50);
     }
 
+    if (++ counter == 100) {
+        delay(100);
+        counter = 0;
+    }
+    */
+
+    return;
+
     while (bufferInputIndex != bufferIndex) {
+        digitalWrite(13, HIGH);
+        data = buffer[bufferInputIndex];
+        if (data == 0xf0) {
+            inSysEx = true;
+            midiIndex = 0;
+        } else if (data == 0xf7) {
+            inSysEx = false;
+            handleSysEx();
+        }
+
+        if (midiIndex < 8) {
+            sysExData[midiIndex] = data;
+        }
+
+        if (inSysEx) {
+            ++ midiIndex;
+        }
+
+        /*
         if (col == 0) {
             if (buffer[bufferInputIndex] < 0x80) {
                 Serial.println("corrupt");
-            }
-
-            if (mpu401Counter > 512) {
-                Serial.println("Buffer exceeded!");
             }
 
             //Serial.print(bufferInputIndex);
             //Serial.print(" - ");
         }
 
-        //printHex(buffer[bufferInputIndex]);
+        printHex(buffer[bufferInputIndex]);
         ++ col;
         if (col == 3) {
-            //Serial.print('\n');
+            Serial.print('\n');
             col = 0;
         }
+        */
 
         if (++ bufferInputIndex > 511) {
             bufferInputIndex = 0;
         }
 
+        if (mpu401Counter >= 512) {
+            Serial.println("Buffer exceeded!");
+        }
+
         -- mpu401Counter;
     }
+    digitalWrite(13, LOW);
 
     return;
+#if 0
     uint8_t data;
     uint8_t buffer[256];
     int bufferIndex = 0;
@@ -265,4 +450,5 @@ void loop()
         Serial.print('\n');
     }
     }
+#endif
 }
