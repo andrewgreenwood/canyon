@@ -81,52 +81,52 @@ bool OPL3SA::init(
     pnp.deactivate();
 
     if (!pnp.assignAddress(0, SOUNDBLASTER_IO_ADDRESS)) {
-        Serial.println("a");
+        Serial.println("Failed to set SB IO address");
         return false;
     }
 
     if (!pnp.assignIRQ(2, SOUNDBLASTER_IRQ)) {
-        Serial.println("b");
+        Serial.println("Failed to set SB IRQ");
         return false;
     }
 
     if (!pnp.assignDMA(1, SOUNDBLASTER_DMA)) {
-        Serial.println("c");
+        Serial.println("Failed to set SB DMA");
         return false;
     }
 
     if (!pnp.assignAddress(0, WSS_IO_ADDRESS)) {
-        Serial.println("d");
+        Serial.println("Failed to set WSS IO address");
         return false;
     }
 
     if (!pnp.assignIRQ(0, WSS_IRQ)) {
-        Serial.println("e");
+        Serial.println("Failed to set WSS IRQ");
         return false;
     }
 
     if (!pnp.assignDMA(0, WSS_DMA)) {
-        Serial.println("f");
+        Serial.println("Failed to set WSS DMA");
         return false;
     }
 
     if (!pnp.assignAddress(2, adlibPort)) {
-        Serial.println("g");
+        Serial.println("Failed to set Adlib IO address");
         return false;
     }
 
     if (!pnp.assignAddress(3, mpu401Port)) {
-        Serial.println("h");
+        Serial.println("Failed to set MPU-401 IO address");
         return false;
     }
 
     if (!pnp.assignIRQ(4, mpu401IRQ)) {
-        Serial.println("i");
+        Serial.println("Failed to set MPU-401 IRQ");
         return false;
     }
 
     if (!pnp.assignAddress(4, CONTROL_IO_ADDRESS)) {
-        Serial.println("j");
+        Serial.println("Failed to set control IO address");
         return false;
     }
 

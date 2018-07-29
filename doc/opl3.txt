@@ -1,0 +1,321 @@
+Initial Testing
+---------------
+
+Send MIDI SysEx messages from PC to control the I/O ports and get an idea of
+the device behaviour (e.g. can we immediately stop a sound by making its
+release rate immediate and then setting key-on to 0?)
+
+F0 7D xa 0b 0c 0d F7
+
+x = 0 for primary register set, 1 for secondary
+a = high 4 bits of register
+b = low 4 bits of register
+c = high 4 bits of data
+d = low 4 bits of data
+
+Can be multiple writes per message - only complete 4 bytes will be dealt
+with.
+
+The actual MIDI synth code can then run on PC, with the ISA port writes
+redirected to the MME APIs on Windows (midiOutLongMsg).
+
+
+OPL3 Registers
+--------------
+
+Register    Size    Scope   Purpose
+01          1 bit   Global  Waveform select enable (always true)
+            5 bits  Global  Test register (always zero)
+
+02          8 bits  Global  Timer 1 count (80 usec resolution)
+
+03          8 bits  Global  Timer 2 count (320 usec resolution)
+
+04 (set 1)  1 bit   Global  IRQ reset
+            1 bit   Global  Timer 1 mask
+            1 bit   Global  Timer 2 mask
+            1 bit   Global  Timer 1 start
+            1 bit   Global  Timer 2 start
+
+04 (set 2)  1 bit   Global  4 operator mode (pair 0 and 3)
+            1 bit   Global  4 operator mode (pair 1 and 4)
+            1 bit   Global  4 operator mode (pair 2 and 5)
+            1 bit   Global  4 operator mode (pair 9 and C)
+            1 bit   Global  4 operator mode (pair A and D)
+            1 bit   Global  4 operator mode (pair B and E)
+
+05 (set 2)  1 bit   Global  Enable OPL-3 mode
+
+08          1 bit   Global  CSW ??
+            1 bit   Global  Note-Sel ??
+
+20 - 35     1 bit   Oper.   Tremolo on
+            1 bit   Oper.   Vibrato on
+            1 bit   Oper.   Sustain on
+            1 bit   Oper.   KSR
+            4 bits  Oper.   Frequency multiplication factor
+
+40 - 55     2 bits  Oper.   Key scale level
+            6 bits  Oper.   Output level (attenuation)
+
+60 - 75     4 bits  Oper.   Attack rate
+            4 bits  Oper.   Decay rate
+
+80 - 95     4 bits  Oper.   Sustain level
+            4 bits  Oper.   Release rate
+
+A0 - A8     8 bits  Channel Frequency number (lower 8 bits)
+
+B0 - B8     1 bit   Channel Key on
+            3 bits  Channel Block number
+            2 bits  Channel Frequency number (highest 2 bits)
+
+BD          1 bit   Global  Tremolo depth
+            1 bit   Global  Vibrato depth
+            1 bit   Global  Percussion mode
+            1 bit   Global  Bass drum key on
+            1 bit   Global  Snare drum key on
+            1 bit   Global  Tom-Tom key on
+            1 bit   Global  Cymbal key on
+            1 bit   Global  Hi-hat key on
+
+C0 - C8     1 bit   Channel Left output enable
+            1 bit   Channel Right output enable
+            3 bits  Channel Feedback modulation factor
+            1 bit   Channel Synth type
+
+E0 - F5     3 bits  Oper.   Waveform select
+
+
+Summary
+-------
+18 channels     3 bytes per channel  (20 bits), 4 unused bits
+36 operators    5 bytes per operator (35 bits), 5 unused bits
+
+
+Channels
+--------
+0   2-op / 4-op
+1   2-op / 4-op
+2   2-op / 4-op
+3   2-op only (used by 0 in 4-op mode)
+4   2-op only (used by 1 in 4-op mode)
+5   2-op only (used by 2 in 4-op mode)
+6   2-op / percussion (bass drum)
+7   2-op / percussion (hi-hat, snare drum)
+8   2-op / percussion (tom-tom, cymbal)
+9   2-op / 4-op
+10  2-op / 4-op
+11  2-op / 4-op
+12  2-op only (used by 9 in 4-op mode)
+13  2-op only (used by 9 in 4-op mode)
+14  2-op only (used by 9 in 4-op mode)
+15  2-op only
+16  2-op only
+17  2-op only
+
+Channel allocation strategy
+---------------------------
+Available channels based on what patches are selected.
+
+If only 2-op patches are selected, all channels are available.
+
+If any percussion patches are loaded, channels 6, 7 and 8 are reserved for
+percussion. Anything playing on those channels is stopped immediately.
+
+If any 4-op patches are selected:
+- Channels 15, 16, 17 are used first for 2-op patches
+- Channels 6, 7 and 8 are used next for 2-op patches unless percussion enabled
+- 4-op channels can be used until needed
+
+When a 4-op capable channel is being allocated for a 2-op patch, allocation
+should take place in this priority order:
+
+0 3 1 4 2 5 9 12 10 13 11 14
+
+4-op allocation should take place in this priority order:
+
+11, 10, 9, 2, 1, 0
+
+So, 2-op allocation happens upwards, while 4-op allocation happens downwards.
+
+In case of conflict, the affected channel is stopped and converted to the
+appropriate mode before sounding the new patch.
+
+
+Effects/Controls
+----------------
+
+Tremolo and vibrato are quite limited, with the depth being set globally.
+These can be performed in software instead (rate, depth).
+
+Portamento and pitch bend are nice to have.
+Polyphonic portamento probably should operate on the most recently stopped note?
+
+Delay beore tremolo/vibrato?
+
+
+Patch Operator Data
+-------------------
+Corresponds to operator parameters:
+4 bits  Frequency mutiplication factor
+1 bit   Envelope scaling (KSR)
+1 bit   Sustain (hold at sustain level until key off)
+2 bits  Key scale level
+6 bits  Output level (attenuation)
+4 bits  Attack rate
+4 bits  Decay rate
+4 bits  Sustain level
+4 bits  Release rate
+3 bits  Waveform
+
+33 bits (5 bytes, 7 unused bits)
+
+x4 operators = 20 bytes
+Can store 51 4-op melodic patches
+
+
+Patch Data
+----------
+2 bits  Synth type (1 bit per OPL3 port)
+3 bits  Feedback modulation factor
+3 bits  Patch type (disabled, 2-op, 4-op, bass drum, snare, tomtom, hihat, cymbal)
+
+8 bits (1 byte)
+
+
+Performance Channel Data
+------------------------
+10 bits Frequency
+3 bits  Block number
+1 bit   Key-on
+1 bit   Left output enable
+1 bit   Right output enable
+
+
+Base Functionality Implementation
+---------------------------------
+writeGlobal(globalRegister, value)
+
+OPL3_GLOBAL_REGISTER_A      0x04
+OPL3_GLOBAL_REGISTER_B      0xBD
+
+writeOperator(opRegister, operatorId, value)
+
+OPL3_OPERATOR_REGISTER_A    0x20
+OPL3_OPERATOR_REGISTER_B    0x40
+OPL3_OPERATOR_REGISTER_C    0x60
+OPL3_OPERATOR_REGISTER_D    0x80
+OPL3_OPERATOR_REGISTER_F    0xE0
+
+writeChannel(chanRegister, channel, value)
+
+OPL3_CHANNEL_REGISTER_A     0xA0
+OPL3_CHANNEL_REGISTER_B     0xB0
+OPL3_CHANNEL_REGISTER_C     0xC0
+
+
+Operator Register Offsets
+-------------------------
+Offsets 6, 7, E and F are not used.
+
+Reg     Offset
+0/18    0
+1/19    1
+2/20    2
+3/21    3
+4/22    4
+5/23    5
+6/24    8
+7/25    9
+8/26    A
+9/27    B
+10/28   C
+11/29   D
+12/30   10
+13/31   11
+14/32   12
+15/33   13
+16/34   14
+17/35   15
+
+
+0 = 000000
+1 = 000001
+2 = 000010
+3 = 000011
+4 = 000100
+5 = 000101
+
+6 = 000110  --> 8 = 001000
+7 = 000111  --> 9 = 001001
+...
+
+
+General Operation
+-----------------
+
+Synth.loadPatch(channel, patchInstance)
+
+Synth.playNote(channel, note, velocity)
+Synth.stopNote(channel, note)
+
+Synth.setAttackRate(channel, operatorIndex, rate)
+Synth.setDecayRate(channel, operatorIndex, rate)
+Synth.setSustainLevel(channel, operatorIndex, level)
+Synth.setReleaseRate(channel, operatorIndex, rate)
+Synth.setWaveform(channel, operatorIndex, waveform)
+(etc.)
+
+Synth.bendPitch(channel, bendAmount)
+
+Changes alter how the patch sounds until it is re-loaded.
+
+Global data
+- 4-op flags, percussion mode flag, percussion key flags?
+
+Array of 18 elements to track OPL3 channel usage:
+- MIDI channel number (4 bits)
+- Note being played (7 bits)
+
+
+
+Release Rate Timings
+--------------------
+f   0 ms            1
+e   1 ms            2
+d   2 ms            4
+c   3 ms            8
+b   4 ms            16
+a   5 ms            32
+9   16 ms           64
+8                   128
+7                   256
+6   500 ms          512
+5   1 second        1024
+4   2 seconds       2048
+3   4 seconds       4096
+2   8 seconds       8192
+1   16 seconds      16384
+0   Infinite        -
+
+
+
+Quickly stop a note
+-------------------
+Set release rate to 0x7f
+Key-off
+
+
+Frequencies (from Adlib Tracker)
+--------------------------------
+Fnum table:
+0x157 0x16b 0x181 0x198 0x1b0 0x1ca 0x15e 0x202 0x220 0x241 0x263 0x287
+
+FreqStart = 0x156
+FreqEnd = 0x2ae
+
+nFreq(note)
+Maximum note = 12 * 8 (96)
+
+Divide by 12 to get Fnum table index

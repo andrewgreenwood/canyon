@@ -65,6 +65,6 @@ void MPU401::writeData(
 
 uint8_t MPU401::readData() const
 {
-    waitReadReady();
+    //waitReadReady();
     return m_isaBus.read(m_ioAddress);
 }

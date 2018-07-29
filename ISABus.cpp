@@ -8,7 +8,7 @@
 #include <arduino.h>
 #include "ISABus.h"
 
-#define ISA_IO_WAIT     20
+#define ISA_IO_WAIT     1000
 #define DO_LSB          1
 
 ISABus::ISABus(
@@ -36,7 +36,7 @@ void ISABus::reset() const
 
     // Lower RESET on the ISA bus
     pinMode(m_resetPin, OUTPUT);
-    digitalWrite(m_resetPin, LOW);
+    digitalWrite(m_resetPin, HIGH);
 
     pinMode(m_outputPin, OUTPUT);
     pinMode(m_inputPin, INPUT);
@@ -44,7 +44,7 @@ void ISABus::reset() const
     pinMode(m_loadPin, OUTPUT);
 
     // Ready to go
-    digitalWrite(m_resetPin, HIGH);
+    digitalWrite(m_resetPin, LOW);
 }
 
 void ISABus::write(
@@ -82,7 +82,8 @@ void ISABus::write(
 
     // Lower the IOW pin on the ISA bus to indicate we're writing data
     digitalWrite(m_ioWritePin, LOW);
-    delay(ISA_IO_WAIT);
+    for (int wait = 0; wait < ISA_IO_WAIT; ++ wait) {}
+    //delayMicroseconds(ISA_IO_WAIT);
     digitalWrite(m_ioWritePin, HIGH);
 }
 
@@ -116,7 +117,8 @@ uint8_t ISABus::read(
     digitalWrite(m_ioReadPin, LOW);
 
     // Give the device some time to respond
-    delay(ISA_IO_WAIT);
+//    delayMicroseconds(ISA_IO_WAIT);
+    for (int wait = 0; wait < ISA_IO_WAIT; ++ wait) {}
 
     // Load the data from the ISA data pins into the universal shift register
     digitalWrite(m_clockPin, LOW);
