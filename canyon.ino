@@ -11,6 +11,8 @@
 #include "ISABus.h"
 #include "OPL3SA.h"
 #include "MPU401.h"
+#include "MIDIBuffer.h"
+#include "MIDI.h"
 
 const uint8_t mpu401IntPin = 2;
 const uint8_t isaReadPin = 5;
@@ -28,219 +30,53 @@ ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
 
-#define MIDI_BUFFER_SIZE    128
-
-volatile uint8_t midiBuffer[MIDI_BUFFER_SIZE];
-volatile unsigned int midiBufferWriteIndex = 0;
-volatile unsigned int midiBufferReadIndex = 0;
-volatile unsigned int midiBufferUsage = 0;
-
-unsigned int getAvailableMidiBufferSpace()
-{
-    return MIDI_BUFFER_SIZE - midiBufferUsage;
-}
-
-uint8_t getExpectedMidiMessageLength(
-    uint8_t status)
-{
-    switch (status & 0xf0) {
-        case 0xc0:
-        case 0xd0:
-            return 2;
-
-        case 0x80:
-        case 0x90:
-        case 0xa0:
-        case 0xb0:
-        case 0xe0:
-            return 3;
-
-        case 0xf6:
-        case 0xf7:
-        case 0xf8:
-        case 0xfa:
-        case 0xfb:
-        case 0xfc:
-        case 0xfe:
-        case 0xff:
-            return 1;
-
-        case 0xf1:
-        case 0xf3:
-            return 2;
-
-        case 0xf2:
-            return 3;
-
-        default:
-            // Unsupported (ignore until next status)
-            return 0;
-    }
-}
+MIDIBuffer midiBuffer;
 
 /*
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
     routine just buffers the incoming data.
-
-    A small amount of buffer space is saved by maintaining a "running status"
-    byte, where multiple data relating to the same status byte arrives (e.g.
-    multiple control changes on the same channel).
-
-    Long (i.e. System Exclusive) messages are ignored.
-
-    Note that data is not validated here.
 */
+
 void mpu401InterruptHandler()
 {
-    static uint8_t currentStatus = 0;
     uint8_t data;
-    bool skip;
+    uint16_t expectedLength;
+    static uint8_t length = 0;
+
+    static struct MIDIMessage message = {
+        0, {0, 0}
+    };
 
     while (mpu401.canRead()) {
         data = mpu401.readData();
-        skip = false;
 
-        digitalWrite(3, LOW);
-        if (getAvailableMidiBufferSpace() < 1) {
-            // Not enough room - ignore the message
-
-            digitalWrite(3, HIGH);
-            currentStatus = 0;
-            skip = true;
-        } else if (data & 0x80) {
+        if (data & 0x80) {
             // Status byte
-            if (data == 0xf0) {
-                // Skip System Exclusive messagers
-                currentStatus = 0;
-                skip = true;
-            } else if ((data == currentStatus) && (currentStatus < 0xf0)) {
-                // The status byte can be inferred from the previous one
-                // ("running status")
-                skip = true;
-            } else {
-                currentStatus = data;
-            }
-        } else if (currentStatus == 0) {
-            // Unknown status byte, so can't do anything meaningful with
-            // the data
-            skip = true;
-        }
-
-        if (!skip) {
-            midiBuffer[midiBufferWriteIndex] = data;
-            ++ midiBufferUsage;
-
-            // Wrap around
-            if (++ midiBufferWriteIndex == MIDI_BUFFER_SIZE) {
-                midiBufferWriteIndex = 0;
-            }
-        }
-    }
-
-    digitalWrite(3, LOW);
-}
-
-bool midiDataAvailable()
-{
-    if (mpu401.canRead()) {
-        noInterrupts();
-        mpu401InterruptHandler();
-        interrupts();
-    }
-
-    return (midiBufferUsage > 0);
-}
-
-uint8_t peekMidiByte()
-{
-    uint8_t data;
-
-    if (!midiDataAvailable()) {
-        return 0;
-    }
-
-    data = midiBuffer[midiBufferReadIndex];
-
-    return data;
-}
-
-uint8_t readMidiByte()
-{
-    uint8_t data;
-
-    data = peekMidiByte();
-
-    // Wrap around
-    if (++ midiBufferReadIndex == MIDI_BUFFER_SIZE) {
-        midiBufferReadIndex = 0;
-    }
-
-    -- midiBufferUsage;
-
-    return data;
-}
-
-typedef struct MidiMessage {
-    uint8_t status;
-    uint8_t data[2];
-} MidiMessage;
-
-struct MidiMessage getMidiMessage()
-{
-    static uint8_t currentStatus = 0;
-    unsigned int expectedLength = 0;
-    unsigned int length = 0;
-    bool failed = false;
-
-    MidiMessage message = {};
-
-    while ((midiDataAvailable()) && (!failed)) {
-        // Add missing status byte where multiple messages for the same
-        // status byte were received (either the sender omitted them, or we
-        // stripped them out ourselves).
-        if (peekMidiByte() & 0x80) {
-            currentStatus = readMidiByte();
-        } else if (currentStatus == 0) {
-            // Data byte for an unknown status - consume it and move on
-            readMidiByte();
+            message.status = data;
+            length = 1;
+        } else if (message.status == 0) {
+            // Unknown status - skip
             continue;
+        } else {
+            // Data byte
+            message.data[length - 1] = data;
+
+            ++ length;
         }
 
-        // Is this message complete?
-        expectedLength = getExpectedMidiMessageLength(currentStatus);
-        if (midiBufferUsage + 1 < expectedLength) {
-            //Serial.println("Incomplete message (1)");
-            break;
-        }
+        expectedLength = getExpectedMidiMessageLength(message.status);
 
-        // We know there is enough data in the buffer now, so we can proceed
-        message.status = currentStatus;
+        if (expectedLength == 0) {
+            // Not a supported message - ignore it and wait for the next
+            // status byte
+            message.status = 0;
+        } else if (length == expectedLength) {
+            midiBuffer.put(message);
 
-        for (unsigned int i = 0; i < expectedLength - 1; ++ i) {
-            if (!midiDataAvailable()) {
-                Serial.println("Incomplete message (3)");
-                failed = true;
-                break;
-            }
-
-            // If there's a status byte now, drop this message (as it's clearly
-            // incomplete/corrupt) and move on to the next
-            if (peekMidiByte() & 0x80) {
-                Serial.println("Incomplete message (2)");
-                break;
-            }
-
-            message.data[i] = readMidiByte();
+            // Keep the status byte for the next message
+            length = 1;
         }
     }
-
-    if (failed) {
-        message.status = 0;
-        message.data[0] = 0;
-        message.data[1] = 0;
-    }
-
-    return message;
 }
 
 void setup()
@@ -330,15 +166,20 @@ void opl3Write(
 void serviceMidiInput()
 {
     bool hasData = false;
-    MidiMessage message;
+    struct MIDIMessage message;
     uint16_t fnum;
     uint8_t block;
     uint8_t byte_b0;
 
-    while (midiDataAvailable()) {
+    if (mpu401.canRead()) {
+        noInterrupts();
+        mpu401InterruptHandler();
+        interrupts();
+    }
+
+    while (midiBuffer.hasContent()) {
         hasData = true;
-        message = getMidiMessage();
-        if (message.status > 0) {
+        if (midiBuffer.get(message)) {
             Serial.print(message.status, HEX);
             Serial.print(" ");
             Serial.print(message.data[0], HEX);
@@ -347,7 +188,7 @@ void serviceMidiInput()
             Serial.print("\n");
 
             if (message.status == 0x90) {
-                calcFrequencyAndBlock(message.data[0], &fnum, &block);
+                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
                 byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
 
                 opl3Write(0, 0xa0, fnum);
