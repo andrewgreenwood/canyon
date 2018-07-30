@@ -132,8 +132,8 @@ bool OPL3SA::init(
 
     pnp.activate();
 
-    Serial.print("OPL3SA2 version: ");
-    Serial.println(readControl(OPL3SA2_MISC), HEX);
+    //Serial.print("OPL3SA2 version: ");
+    //Serial.println(readControl(OPL3SA2_MISC), HEX);
     //Serial.println(readControl(OPL3SA2_MIC), HEX);
 
     // Full power
@@ -149,7 +149,7 @@ bool OPL3SA::init(
     // ???
     writeControl(OPL3SA2_MISC, 0x8f);
 
-    Serial.println(readControl(OPL3SA2_MISC), HEX);
+    //Serial.println(readControl(OPL3SA2_MISC), HEX);
 
     return true;
 }

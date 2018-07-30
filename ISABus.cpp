@@ -46,6 +46,8 @@ void ISABus::reset() const
     pinMode(m_resetPin, OUTPUT);
     digitalWrite(m_resetPin, HIGH);
 
+    // Shift register / SPI pins
+    pinMode(m_latchPin, OUTPUT);
     pinMode(m_outputPin, OUTPUT);
     pinMode(m_inputPin, INPUT);
     pinMode(m_clockPin, OUTPUT);

@@ -15,14 +15,17 @@ void MPU401::init(
 
 bool MPU401::reset() const
 {
+    unsigned long startTime;
     delay(10);
     writeCommand(0xff);
     delay(10);
 
-    // TODO: Timeout
-    Serial.println("Resetting MPU401");
-    while (readData() != 0xfe) {};
-    Serial.println("Reset complete");
+    startTime = millis();
+    while (readData() != 0xfe) {
+        if (millis() - startTime > 5000) {
+            return false;
+        }
+    };
 
     writeCommand(0x3f);
 
