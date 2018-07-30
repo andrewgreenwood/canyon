@@ -7,6 +7,9 @@
     Designed for Yamaha Audician sound card
 */
 
+// This is very broken at the moment
+//#define USE_MPU401_INTERRUPTS
+
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
 #include "OPL3SA.h"
@@ -37,7 +40,9 @@ MIDIBuffer midiBuffer;
     routine just buffers the incoming data.
 */
 
-void mpu401InterruptHandler()
+volatile bool handlingMpu401Input = false;
+
+void receiveMpu401Data()
 {
     uint8_t data;
     uint16_t expectedLength;
@@ -47,7 +52,19 @@ void mpu401InterruptHandler()
         0, {0, 0}
     };
 
+    /*
+    noInterrupts();
+    if (handlingMpu401Input) {
+        // Don't enter this routine asynchronously if it's already running!
+        interrupts();
+        return;
+    }
+    handlingMpu401Input = true;
+    interrupts();
+    */
+
     while (mpu401.canRead()) {
+
         data = mpu401.readData();
 
         if (data & 0x80) {
@@ -56,6 +73,7 @@ void mpu401InterruptHandler()
             length = 1;
         } else if (message.status == 0) {
             // Unknown status - skip
+            digitalWrite(3, HIGH);
             continue;
         } else {
             // Data byte
@@ -77,6 +95,11 @@ void mpu401InterruptHandler()
             length = 1;
         }
     }
+/*
+    noInterrupts();
+    handlingMpu401Input = false;
+    interrupts();
+    */
 }
 
 void setup()
@@ -114,8 +137,13 @@ void setup()
     Serial.println("Done");
 
     // Set up interrupt handling for the MPU-401 now (after init)
+    #ifdef USE_MPU401_INTERRUPTS
+    Serial.println("Interrupt mode ENABLED");
     pinMode(mpu401IntPin, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(mpu401IntPin), mpu401InterruptHandler, RISING);
+    attachInterrupt(digitalPinToInterrupt(mpu401IntPin), receiveMpu401Data, RISING);
+    #else
+    Serial.println("Interrupt mode NOT ENABLED");
+    #endif
 
     // Set up some initial sound to play with
     opl3Write(true, 0x20, 0x21);
@@ -163,6 +191,8 @@ void opl3Write(
 }
 
 
+uint16_t noData = 0;
+
 void serviceMidiInput()
 {
     bool hasData = false;
@@ -171,21 +201,52 @@ void serviceMidiInput()
     uint8_t block;
     uint8_t byte_b0;
 
+    #ifndef USE_MPU401_INTERRUPTS
+    digitalWrite(3, HIGH);
     if (mpu401.canRead()) {
-        noInterrupts();
-        mpu401InterruptHandler();
-        interrupts();
+        digitalWrite(3, LOW);
+        noData = 0;
+        receiveMpu401Data();
+    }
+    #endif
+
+    /*
+    if (noData > 50000) {
+        Serial.println("HANG?");
+        Serial.print("Status = ");
+        Serial.println(isaBus.read(0x331), HEX);
+        Serial.print("Data = ");
+        Serial.println(isaBus.read(0x330), HEX);
+        Serial.print("Last message = ");
+        Serial.print(message.status, HEX);
+        Serial.print(",");
+        Serial.print(message.data[0], HEX);
+        Serial.print(",");
+        Serial.println(message.data[1], HEX);
+        noData = 0;
     }
 
+    if (!midiBuffer.hasContent()) {
+        ++ noData;
+    }
+    */
+
     while (midiBuffer.hasContent()) {
+        noData = 0;
         hasData = true;
+        /*
+        Serial.print(midiBuffer.usage());
+        Serial.print(" -- ");
+        */
         if (midiBuffer.get(message)) {
+            /*
             Serial.print(message.status, HEX);
             Serial.print(" ");
             Serial.print(message.data[0], HEX);
             Serial.print(" ");
             Serial.print(message.data[1], HEX);
             Serial.print("\n");
+            */
 
             if (message.status == 0x90) {
                 calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
@@ -194,7 +255,7 @@ void serviceMidiInput()
                 opl3Write(0, 0xa0, fnum);
                 opl3Write(0, 0xb0, byte_b0);
             } else if (message.status == 0x80) {
-                calcFrequencyAndBlock(message.data[0], &fnum, &block);
+                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
                 byte_b0 = (fnum >> 8) | (block << 2);
                 opl3Write(0, 0xb0, byte_b0);
             }
@@ -205,6 +266,7 @@ void serviceMidiInput()
     if (hasData) {
 //        Serial.println("");
     }
+
 }
 
 void loop()

@@ -14,7 +14,7 @@
 #include "ISABus.h"
 
 #define USE_SPI         1
-#define ISA_IO_WAIT     10
+#define ISA_IO_WAIT     250
 #define DO_LSB          1
 
 ISABus::ISABus(

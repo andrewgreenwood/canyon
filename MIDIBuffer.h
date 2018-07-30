@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "MIDI.h"
 
-#define MIDI_BUFFER_SIZE    16
+#define MIDI_BUFFER_SIZE    256
 
 class MIDIBuffer {
     public:
