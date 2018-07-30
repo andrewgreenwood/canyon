@@ -1,0 +1,59 @@
+MIDI Controller Mappings
+------------------------
+
+CC# Purpose                 Implementation Details
+1   Modulation              Software control, modulate all carriers
+5   Portamento Time         Software control
+
+6   Data Entry              Reserved
+
+7   Volume                  Software control - interacts with note velocity etc.
+10  Panning                 OPL3 control, 0~43=left, 44~84=centre, 84~127=right
+
+14  Synthesis Type          2-op/4-op etc. & carrier/modulator arrangement
+15  Feedback Modulation     OPL3 control (3-bit)
+
+23  Op. 1 Attack Rate       OPL3 control (4-bit)
+24  Op. 1 Decay Rate        OPL3 control (4-bit)
+25  Op. 1 Sustain Level     OPL3 control (4-bit)
+26  Op. 1 Release Rate      OPL3 control (4-bit)
+27  Op. 1 Waveform Select   OPL3 control (3-bit)
+28  Op. 1 Level             OPL3 control (6-bit)
+29  Op. 1 Sustain Enable    OPL3 control (1-bit)
+30  Op. 1 Envelope Scaling  OPL3 control (1-bit - KSR)
+31  Op. 1 Key Scaling Level OPL3 control (2-bit)
+
+32  Bank Select (LSB)       Reserved
+
+33  Op. 2 Attack Rate       OPL3 control (4-bit)
+34  Op. 2 Decay Rate        OPL3 control (4-bit)
+35  Op. 2 Sustain Level     OPL3 control (4-bit)
+36  Op. 2 Release Rate      OPL3 control (4-bit)
+37  Op. 2 Waveform Select   OPL3 control (3-bit)
+38  Op. 2 Level             OPL3 control (6-bit)
+39  Op. 2 Sustain Enable    OPL3 control (1-bit)
+40  Op. 2 Envelope Scaling  OPL3 control (1-bit - KSR)
+41  Op. 2 Key Scaling Level OPL3 control (2-bit)
+
+43  Op. 3 Attack Rate       OPL3 control (4-bit)
+44  Op. 3 Decay Rate        OPL3 control (4-bit)
+45  Op. 3 Sustain Level     OPL3 control (4-bit)
+46  Op. 3 Release Rate      OPL3 control (4-bit)
+47  Op. 3 Waveform Select   OPL3 control (3-bit)
+48  Op. 3 Level             OPL3 control (6-bit)
+49  Op. 3 Sustain Enable    OPL3 control (1-bit)
+50  Op. 3 Envelope Scaling  OPL3 control (1-bit - KSR)
+51  Op. 3 Key Scaling Level OPL3 control (2-bit)
+
+53  Op. 4 Attack Rate       OPL3 control (4-bit)
+54  Op. 4 Decay Rate        OPL3 control (4-bit)
+55  Op. 4 Sustain Level     OPL3 control (4-bit)
+56  Op. 4 Release Rate      OPL3 control (4-bit)
+57  Op. 4 Waveform Select   OPL3 control (3-bit)
+58  Op. 4 Level             OPL3 control (6-bit)
+59  Op. 4 Sustain Enable    OPL3 control (1-bit)
+60  Op. 4 Envelope Scaling  OPL3 control (1-bit - KSR)
+61  Op. 4 Key Scaling Level OPL3 control (2-bit)
+
+64  Sustain Pedal           Software control (keep OPL3 Key-On set)
+65  Portamento On/Off       Software control
