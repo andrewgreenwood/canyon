@@ -57,3 +57,12 @@ CC# Purpose                 Implementation Details
 
 64  Sustain Pedal           Software control (keep OPL3 Key-On set)
 65  Portamento On/Off       Software control
+
+120 All Sound Off           Immediately stop all sound
+121 Reset All Controllers   Reset to default values
+122 Local Control On/Off    n/a
+123 All Notes Off           Stop all playing notes
+124 Omni Mode On
+125 Omni Mode Off
+126 Monophonic mode
+127 Polyphonic mode
