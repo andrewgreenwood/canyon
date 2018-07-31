@@ -14,8 +14,13 @@
 #include "ISABus.h"
 #include "OPL3SA.h"
 #include "MPU401.h"
+#include "OPL3.h"
 #include "MIDIBuffer.h"
 #include "MIDI.h"
+
+const uint16_t mpu401IoBaseAddress  = 0x330;
+const uint8_t  mpu401IRQ            = 5;
+const uint16_t opl3IoBaseAddress    = 0x388;
 
 const uint8_t mpu401IntPin = 2;
 const uint8_t isaReadPin = 5;
@@ -32,6 +37,7 @@ ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
+OPL3 opl3(isaBus, opl3IoBaseAddress);
 
 MIDIBuffer midiBuffer;
 
@@ -110,26 +116,22 @@ void setup()
     Serial.println("Canyon\n------");
 
     Serial.print("Initialising OPL3SA... ");
-    if (!opl3sa.init(0x330, 5, 0x388)) {
+    if (!opl3sa.init(mpu401IoBaseAddress, mpu401IRQ, opl3IoBaseAddress)) {
         Serial.println("Failed");
         for (;;) {}
     }
     Serial.println("Done");
 
     Serial.print("Initialising OPL3... ");
-    for (int i = 0; i <= 0xff; ++ i) {
-        // Primary register set
-        isaBus.write(0x388, i);
-        isaBus.write(0x389, 0);
-
-        // Secondary register set
-        isaBus.write(0x38a, i);
-        isaBus.write(0x38b, 0);
+    if (!opl3.detect()) {
+        Serial.println("Failed to detect");
+        for (;;) {}
     }
+    opl3.reset();
     Serial.println("Done");
 
     Serial.print("Initialising MPU-401... ");
-    mpu401.init(0x330);
+    mpu401.init(mpu401IoBaseAddress);
     if (!mpu401.reset()) {
         Serial.println("Failed");
         for (;;) {}
@@ -146,15 +148,22 @@ void setup()
     #endif
 
     // Set up some initial sound to play with
-    opl3Write(true, 0x20, 0x21);
-    opl3Write(true, 0x40, 0x18);
-    opl3Write(true, 0x60, 0xf0);   // Attack/Decay
-    opl3Write(true, 0x80, 0x77);   // Sustain/Release
-    opl3Write(true, 0xa0, 0x98);
-    opl3Write(true, 0x23, 0x21);
-    opl3Write(true, 0x43, 0x00);
-    opl3Write(true, 0x63, 0xf4);   // Attack/Decay
-    opl3Write(true, 0x83, 0x7f);   // Sustain/Release
+    // 17 32 35
+    #define TEST_CHANNEL 17
+    #define TEST_OP1     32
+    #define TEST_OP2     35
+
+    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_A, 0x21);
+    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_B, 0x18);
+    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_C, 0xf0);
+    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_D, 0x77);
+
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_A, 0x21);
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_B, 0x18);
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_C, 0xf4);
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_D, 0x7f);
+
+    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_C, 0x30);
 
     Serial.println("\nReady!\n");
 }
@@ -178,18 +187,6 @@ void calcFrequencyAndBlock(
     *block = note / 12;
     *frequency = freqBlockTable[note % 12];
 }
-
-void opl3Write(
-    bool primary,
-    uint8_t reg,
-    uint8_t data)
-{
-    uint16_t basePort = primary ? 0x388 : 0x38a;
-
-    isaBus.write(basePort, reg);
-    isaBus.write(basePort + 1, data);
-}
-
 
 uint16_t noData = 0;
 
@@ -252,12 +249,12 @@ void serviceMidiInput()
                 calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
                 byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
 
-                opl3Write(0, 0xa0, fnum);
-                opl3Write(0, 0xb0, byte_b0);
+                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
+                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
             } else if (message.status == 0x80) {
                 calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
                 byte_b0 = (fnum >> 8) | (block << 2);
-                opl3Write(0, 0xb0, byte_b0);
+                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
             }
         }
         //Serial.print(getMidiMessage(), HEX);
