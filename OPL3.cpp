@@ -5,10 +5,6 @@
     Date:       July 2018
 */
 
-#ifdef ARDUINO
-#include <arduino.h>
-#endif
-
 #include "OPL3.h"
 
 OPL3::OPL3(
@@ -78,13 +74,15 @@ void OPL3::reset() const
         writeOperator(i, OPL3_OPERATOR_REGISTER_C, 0x00);
     }
 
+    // TODO: Maybe initialise the other channel and operator registers?
+
     // Enable waveform selection
     writeData(true, 0x01, 0x20);
-    writeData(false, 0x01, 0x20);
+    //writeData(false, 0x01, 0x20);
 
     // Disable keyboard split
     writeData(true, 0x08, 0x40);
-    writeData(false, 0x08, 0x40);
+    //writeData(false, 0x08, 0x40);
 
     // Enable OPL3 mode
     writeData(false, 0x05, 0x01);
@@ -196,18 +194,6 @@ void OPL3::writeData(
         address = m_ioBaseAddress + 2;
     }
 
-//    Serial.println(opl3Register, HEX);
-
     m_isaBus.write(address, opl3Register);
     m_isaBus.write(address + 1, data);
 }
-
-#ifndef ARDUINO
-int main()
-{
-    ISABus isa;
-    OPL3 opl3(isa, 0x388);
-
-    opl3.reset();
-}
-#endif
