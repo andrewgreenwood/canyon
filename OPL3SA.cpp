@@ -2,6 +2,7 @@
 #include "ISAPlugAndPlay.h"
 #include "OPL3SA.h"
 
+// TODO: Move these into the main program
 #define SOUNDBLASTER_IO_ADDRESS  0x220
 #define MPU401_IO_ADDRESS        0x330
 #define CONTROL_IO_ADDRESS       0x370
