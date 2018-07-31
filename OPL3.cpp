@@ -5,6 +5,10 @@
     Date:       July 2018
 */
 
+#ifdef ARDUINO
+#include <arduino.h>
+#endif
+
 #include "OPL3.h"
 
 OPL3::OPL3(
@@ -78,11 +82,9 @@ void OPL3::reset() const
 
     // Enable waveform selection
     writeData(true, 0x01, 0x20);
-    //writeData(false, 0x01, 0x20);
 
     // Disable keyboard split
     writeData(true, 0x08, 0x40);
-    //writeData(false, 0x08, 0x40);
 
     // Enable OPL3 mode
     writeData(false, 0x05, 0x01);
