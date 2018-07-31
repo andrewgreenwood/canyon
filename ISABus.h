@@ -32,6 +32,10 @@
 
 #include <stdint.h>
 
+#ifndef ARDUINO
+    // Not compiling for embedded use - use simulated ISA bus
+    #include "prototype/ISABus.h"
+#else
 class ISABus {
     public:
         ISABus(
@@ -63,5 +67,6 @@ class ISABus {
         uint8_t m_ioReadPin;
         uint8_t m_resetPin;
 };
+#endif
 
 #endif
