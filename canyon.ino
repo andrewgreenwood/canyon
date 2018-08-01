@@ -260,7 +260,6 @@ bool calcFrequencyAndBlock(
 }
 
 uint16_t noData = 0;
-uint32_t freq = 4000;
 
 void serviceMidiInput()
 {
@@ -278,54 +277,6 @@ void serviceMidiInput()
         receiveMpu401Data();
     }
     #endif
-
-    ++ freq;
-
-    /*
-    if (noData > 50000) {
-        Serial.println("HANG?");
-        Serial.print("Status = ");
-        Serial.println(isaBus.read(0x331), HEX);
-        Serial.print("Data = ");
-        Serial.println(isaBus.read(0x330), HEX);
-        Serial.print("Last message = ");
-        Serial.print(message.status, HEX);
-        Serial.print(",");
-        Serial.print(message.data[0], HEX);
-        Serial.print(",");
-        Serial.println(message.data[1], HEX);
-        noData = 0;
-    }
-
-    if (!midiBuffer.hasContent()) {
-        ++ noData;
-    }
-    */
-
-    /*
-    freq += 200;
-    block = frequencyToBlock(freq);
-
-    if (block == 255) {
-        freq = 0;
-    }
-
-    fnum = frequencyToFnum(freq, block);
-
-    if (freq % 10 == 0) {
-        Serial.print(freq, DEC);
-        Serial.print(' ');
-        Serial.print(block, DEC);
-        Serial.print(' ');
-        Serial.println(fnum, DEC);
-    }
-
-    byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
-    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
-    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
-
-    delay(100);
-    */
 
     while (midiBuffer.hasContent()) {
         noData = 0;
