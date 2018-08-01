@@ -159,7 +159,7 @@ void setup()
     opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_D, 0x77);
 
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_A, 0x21);
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_B, 0x18);
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_B, 0x10);
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_C, 0xf4);
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_D, 0x7f);
 
@@ -174,7 +174,7 @@ const uint16_t freqBlockTable[12] = {
     0x157, 0x16b, 0x181, 0x198, 0x1b0, 0x1ca, 0x1e5, 0x202, 0x220, 0x241, 0x263, 0x287
 };
 
-void calcFrequencyAndBlock(
+void calcFrequencyAndBlock_old(
     uint8_t note,
     uint16_t *frequency,
     uint8_t *block)
@@ -186,6 +186,96 @@ void calcFrequencyAndBlock(
 
     *block = note / 12;
     *frequency = freqBlockTable[note % 12];
+}
+
+// New code
+uint16_t frequencyToFnum(
+    uint32_t freqHundredths,
+    uint8_t block)
+{
+    const uint32_t blockMultiplierTable[8] = {
+        524288L,
+        262144L,
+        131072L,
+        65536L,
+        32768L,
+        16384L,
+        8192L,
+        4096L
+    };
+
+    if (freqHundredths < 3) {
+        return 0;
+    } else if (freqHundredths > 620544) {
+        return 1023;
+    }
+
+    return (freqHundredths * blockMultiplierTable[block]) / 2485800;
+}
+
+int8_t frequencyToBlock(
+    uint32_t freqHundredths)
+{
+    if (freqHundredths < 4848) {
+        return 0;
+    } else if (freqHundredths < 9696) {
+        return 1;
+    } else if (freqHundredths < 19392) {
+        return 2;
+    } else if (freqHundredths < 38784) {
+        return 3;
+    } else if (freqHundredths < 77568) {
+        return 4;
+    } else if (freqHundredths < 155136) {
+        return 5;
+    } else if (freqHundredths < 310272) {
+        return 6;
+    } else if (freqHundredths < 627300) {
+        return 7;
+    } else {
+        return -1;
+    }
+}
+
+void calcFrequencyAndBlock(
+    uint8_t note,
+    uint16_t *frequency,
+    uint8_t *block)
+{
+    const uint16_t scaling[9] = {
+        1, 2, 4, 8, 16, 32, 64, 128, 256
+    };
+
+    uint8_t octave;
+    uint32_t freqHundredth;
+    uint32_t multiplier;
+
+    // Frequencies in octave 0
+    const uint16_t noteFrequencies[12] = {
+        1635,
+        1732,
+        1835,
+        1945,
+        2060,
+        2183,
+        2312,
+        2450,
+        2596,
+        2750,
+        2914,
+        3087
+    };
+
+    octave = (note / 12);
+
+    multiplier = scaling[octave];
+
+    freqHundredth = noteFrequencies[note % 12] * multiplier;
+
+    Serial.println(freqHundredth, DEC);
+
+    *block = frequencyToBlock(freqHundredth);
+    *frequency = frequencyToFnum(freqHundredth, *block);
 }
 
 uint16_t noData = 0;
@@ -247,6 +337,10 @@ void serviceMidiInput()
 
             if (message.status == 0x90) {
                 calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
+                Serial.print("Block ");
+                Serial.print(block, DEC);
+                Serial.print(" - FNum ");
+                Serial.println(fnum, DEC);
                 byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
 
                 opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
