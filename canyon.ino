@@ -172,46 +172,33 @@ uint16_t frequencyToFnum(
     uint32_t freqHundredths,
     uint8_t block)
 {
-    const uint32_t blockMultiplierTable[8] = {
-        524288L,
-        262144L,
-        131072L,
-        65536L,
-        32768L,
-        16384L,
-        8192L,
-        4096L
-    };
-
     if (freqHundredths < 3) {
         return 0;
     } else if (freqHundredths > 620544) {
         return 1023;
     }
 
-    return (freqHundredths * blockMultiplierTable[block]) / 2485800;
+    return (freqHundredths * (524288L >> block)) / 2485800;
 }
 
-int8_t frequencyToBlock(
+uint8_t frequencyToBlock(
     uint32_t freqHundredths)
 {
-    if (freqHundredths < 4848) {
-        return 0;
-    } else if (freqHundredths < 9696) {
-        return 1;
-    } else if (freqHundredths < 19392) {
-        return 2;
-    } else if (freqHundredths < 38784) {
-        return 3;
-    } else if (freqHundredths < 77568) {
-        return 4;
-    } else if (freqHundredths < 155136) {
-        return 5;
-    } else if (freqHundredths < 310272) {
-        return 6;
-    } else {
-        return 7;
+    // The maximum frequency doubles each time the block number increases.
+    // We start with 48.48Hz and try to find the lowest block that can
+    // represent the desired frequency, for the greatest accuracy.
+    uint8_t block;
+    uint32_t maxFreq = 4848;
+
+    for (block = 0; block < 7; ++ block) {
+        if (freqHundredths < maxFreq) {
+            return block;
+        }
+
+        maxFreq <<= 1;
     }
+
+    return block;
 }
 
 bool calcFrequencyAndBlock(
