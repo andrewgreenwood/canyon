@@ -160,7 +160,7 @@ void setup()
 
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_A, 0x21);
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_B, 0x10);
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_C, 0xf4);
+    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_C, 0xf0);
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_D, 0x7f);
 
     opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_C, 0x30);
@@ -168,27 +168,6 @@ void setup()
     Serial.println("\nReady!\n");
 }
 
-
-// Frequencies of notes within each block
-const uint16_t freqBlockTable[12] = {
-    0x157, 0x16b, 0x181, 0x198, 0x1b0, 0x1ca, 0x1e5, 0x202, 0x220, 0x241, 0x263, 0x287
-};
-
-void calcFrequencyAndBlock_old(
-    uint8_t note,
-    uint16_t *frequency,
-    uint8_t *block)
-{
-    // Maximum note
-    if (note > 95) {
-        return;
-    }
-
-    *block = note / 12;
-    *frequency = freqBlockTable[note % 12];
-}
-
-// New code
 uint16_t frequencyToFnum(
     uint32_t freqHundredths,
     uint8_t block)
@@ -230,23 +209,17 @@ int8_t frequencyToBlock(
         return 5;
     } else if (freqHundredths < 310272) {
         return 6;
-    } else if (freqHundredths < 627300) {
-        return 7;
     } else {
-        return -1;
+        return 7;
     }
 }
 
-void calcFrequencyAndBlock(
+bool calcFrequencyAndBlock(
     uint8_t note,
     uint16_t *frequency,
     uint8_t *block)
 {
-    const uint16_t scaling[9] = {
-        1, 2, 4, 8, 16, 32, 64, 128, 256
-    };
-
-    uint8_t octave;
+    int8_t octave;
     uint32_t freqHundredth;
     uint32_t multiplier;
 
@@ -266,19 +239,28 @@ void calcFrequencyAndBlock(
         3087
     };
 
-    octave = (note / 12);
+    if (note > 115) {
+        *frequency = 1023;
+        *block = 7;
+        return false;
+    }
 
-    multiplier = scaling[octave];
-
-    freqHundredth = noteFrequencies[note % 12] * multiplier;
-
-    Serial.println(freqHundredth, DEC);
+    octave = (note / 12) - 1;
+    if (octave >= 0) {
+        multiplier = 1 << octave;
+        freqHundredth = noteFrequencies[note % 12] * multiplier;
+    } else {
+        freqHundredth = noteFrequencies[note % 12] / 2;
+    }
 
     *block = frequencyToBlock(freqHundredth);
     *frequency = frequencyToFnum(freqHundredth, *block);
+
+    return true;
 }
 
 uint16_t noData = 0;
+uint32_t freq = 4000;
 
 void serviceMidiInput()
 {
@@ -296,6 +278,8 @@ void serviceMidiInput()
         receiveMpu401Data();
     }
     #endif
+
+    ++ freq;
 
     /*
     if (noData > 50000) {
@@ -318,6 +302,31 @@ void serviceMidiInput()
     }
     */
 
+    /*
+    freq += 200;
+    block = frequencyToBlock(freq);
+
+    if (block == 255) {
+        freq = 0;
+    }
+
+    fnum = frequencyToFnum(freq, block);
+
+    if (freq % 10 == 0) {
+        Serial.print(freq, DEC);
+        Serial.print(' ');
+        Serial.print(block, DEC);
+        Serial.print(' ');
+        Serial.println(fnum, DEC);
+    }
+
+    byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
+    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
+    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
+
+    delay(100);
+    */
+
     while (midiBuffer.hasContent()) {
         noData = 0;
         hasData = true;
@@ -336,19 +345,21 @@ void serviceMidiInput()
             */
 
             if (message.status == 0x90) {
-                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
-                Serial.print("Block ");
-                Serial.print(block, DEC);
-                Serial.print(" - FNum ");
-                Serial.println(fnum, DEC);
-                byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
+                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
+                    Serial.print("Block ");
+                    Serial.print(block, DEC);
+                    Serial.print(" - FNum ");
+                    Serial.println(fnum, DEC);
+                    byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
+                }
 
                 opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
                 opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
             } else if (message.status == 0x80) {
-                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
-                byte_b0 = (fnum >> 8) | (block << 2);
-                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
+                    byte_b0 = (fnum >> 8) | (block << 2);
+                    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                }
             }
         }
         //Serial.print(getMidiMessage(), HEX);
