@@ -246,8 +246,10 @@ bool OPL3Synth::setFrequencyMultiplicationFactor(
         return false;
     }
 
-    return updateOperator(channelOperator, OPL3_OPERATOR_REGISTER_B);
+    return updateOperator(channelOperator, OPL3_OPERATOR_REGISTER_A);
 }
+
+// TODO: key scale level
 
 bool OPL3Synth::setAttenuation(
     uint8_t channel,
