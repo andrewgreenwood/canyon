@@ -17,6 +17,7 @@
 #include "OPL3.h"
 #include "MIDIBuffer.h"
 #include "MIDI.h"
+#include "OPL3Synth.h"
 
 const uint16_t mpu401IoBaseAddress  = 0x330;
 const uint8_t  mpu401IRQ            = 5;
@@ -38,6 +39,7 @@ ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
 OPL3 opl3(isaBus, opl3IoBaseAddress);
+OPL3Synth opl3Synth(opl3);
 
 MIDIBuffer midiBuffer;
 
@@ -108,6 +110,8 @@ void receiveMpu401Data()
     */
 }
 
+uint8_t ch;
+
 void setup()
 {
     pinMode(3, OUTPUT); // Debugging LED
@@ -153,6 +157,25 @@ void setup()
     #define TEST_OP1     32
     #define TEST_OP2     35
 
+    ch = opl3Synth.allocateChannel(Melody2OpChannelType);
+
+    opl3Synth.enableSustain(ch, 0);
+    opl3Synth.setFrequencyMultiplicationFactor(ch, 0, 1);
+    opl3Synth.setAttenuation(ch, 0, 16);
+    opl3Synth.setAttackRate(ch, 0, 15);
+    opl3Synth.setDecayRate(ch, 0, 0);
+    opl3Synth.setSustainLevel(ch, 0, 7);
+    opl3Synth.setReleaseRate(ch, 0, 7);
+
+    opl3Synth.enableSustain(ch, 1);
+    opl3Synth.setFrequencyMultiplicationFactor(ch, 1, 1);
+    opl3Synth.setAttenuation(ch, 1, 16);
+    opl3Synth.setAttackRate(ch, 1, 15);
+    opl3Synth.setDecayRate(ch, 1, 0);
+    opl3Synth.setSustainLevel(ch, 1, 7);
+    opl3Synth.setReleaseRate(ch, 1, 6);
+
+    /*
     opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_A, 0x21);
     opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_B, 0x18);
     opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_C, 0xf0);
@@ -164,6 +187,10 @@ void setup()
     opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_D, 0x7f);
 
     opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_C, 0x30);
+    */
+
+    // panning
+    opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_C, 0x30);
 
     Serial.println("\nReady!\n");
 }
@@ -291,12 +318,12 @@ void serviceMidiInput()
                     byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
                 }
 
-                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_A, fnum);
-                opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_A, fnum);
+                opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_B, byte_b0);
             } else if (message.status == 0x80) {
                 if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
                     byte_b0 = (fnum >> 8) | (block << 2);
-                    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                    opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_B, byte_b0);
                 }
             }
         }

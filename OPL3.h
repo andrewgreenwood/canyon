@@ -68,7 +68,7 @@ class OPL3 {
             uint16_t ioBaseAddress);
 
         // Determine whether an OPL3 device is present at the I/O address.
-        bool OPL3::detect() const;
+        bool detect() const;
 
         // Stop all sounds and reset the device. Must be called at startup to
         // put the device into OPL3 mode.

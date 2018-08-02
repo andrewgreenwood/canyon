@@ -41,7 +41,9 @@ bool OPL3::detect() const
     writeData(true, 0x04, 0x21);
 
     // Allow the timer to expire
+#ifdef ARDUINO
     delayMicroseconds(80);
+#endif
 
     // Re-check status
     status = readStatus();
