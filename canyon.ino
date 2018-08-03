@@ -266,6 +266,17 @@ bool calcFrequencyAndBlock(
 
 uint16_t noData = 0;
 
+void printMidiMessage(
+    struct MIDIMessage &message)
+{
+    Serial.print(message.status, HEX);
+    Serial.print(" ");
+    Serial.print(message.data[0], HEX);
+    Serial.print(" ");
+    Serial.print(message.data[1], HEX);
+    Serial.print("\n");
+}
+
 void serviceMidiInput()
 {
     bool hasData = false;
@@ -295,14 +306,6 @@ void serviceMidiInput()
         Serial.print(" -- ");
         */
         if (midiBuffer.get(message)) {
-            /*
-            Serial.print(message.status, HEX);
-            Serial.print(" ");
-            Serial.print(message.data[0], HEX);
-            Serial.print(" ");
-            Serial.print(message.data[1], HEX);
-            Serial.print("\n");
-            */
 
             if (message.status == 0x90) {
                 noteSlot = -1;
@@ -374,6 +377,7 @@ void serviceMidiInput()
 
                 if (noteSlot == -1) {
                     Serial.println("Note slot not allocated");
+                    printMidiMessage(message);
                     continue;
                 }
 

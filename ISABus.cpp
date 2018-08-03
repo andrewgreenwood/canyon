@@ -15,7 +15,7 @@
 #include "ISRState.h"
 
 #define USE_SPI         1
-#define ISA_IO_WAIT     250
+#define ISA_IO_WAIT     200
 #define DO_LSB          1
 
 ISABus::ISABus(
