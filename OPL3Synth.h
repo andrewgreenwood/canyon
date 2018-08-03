@@ -132,7 +132,7 @@ class __attribute__((packed)) OPL3Synth {
         OPL3Operator m_operators[38];
 
         // Each bit represents whether a channel has been allocated or not
-        unsigned m_channelBusyBitmap : 18;
+        unsigned m_channelBusyBitmap : 23;
 
         unsigned m_channel0_4op     : 1;
         unsigned m_channel1_4op     : 1;
