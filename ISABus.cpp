@@ -12,6 +12,7 @@
 #include <arduino.h>
 #include <SPI.h>
 #include "ISABus.h"
+#include "ISRState.h"
 
 #define USE_SPI         1
 #define ISA_IO_WAIT     250
@@ -67,7 +68,10 @@ void ISABus::write(
     Serial.print(", 0x");
     Serial.println(data, HEX);
 #endif
-    noInterrupts();
+
+    if (!inISR()) {
+        noInterrupts();
+    }
 
     // Put the data shift register into 'shift' mode
     digitalWrite(m_loadPin, LOW);
@@ -110,7 +114,9 @@ void ISABus::write(
     SPI.endTransaction();
 #endif
 
-    interrupts();
+    if (!inISR()) {
+        interrupts();
+    }
 }
 
 uint8_t ISABus::read(
@@ -124,7 +130,9 @@ uint8_t ISABus::read(
     Serial.print(" --> ");
 #endif
 
-    noInterrupts();
+    if (!inISR()) {
+        noInterrupts();
+    }
 
 #ifdef USE_SPI
     SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
@@ -188,7 +196,9 @@ uint8_t ISABus::read(
     digitalWrite(m_clockPin, LOW);
 #endif
 
-    interrupts();
+    if (!inISR()) {
+        interrupts();
+    }
 
 #ifdef PRINT_IO
     Serial.println(data, HEX);

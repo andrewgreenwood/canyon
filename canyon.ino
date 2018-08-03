@@ -8,7 +8,7 @@
 */
 
 // This is very broken at the moment
-//#define USE_MPU401_INTERRUPTS
+#define USE_MPU401_INTERRUPTS
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -18,6 +18,7 @@
 #include "MIDIBuffer.h"
 #include "MIDI.h"
 #include "OPL3Synth.h"
+#include "ISRState.h"
 
 const uint16_t mpu401IoBaseAddress  = 0x330;
 const uint8_t  mpu401IRQ            = 5;
@@ -43,6 +44,14 @@ OPL3Synth opl3Synth(opl3);
 
 MIDIBuffer midiBuffer;
 
+typedef struct __attribute__((packed)) NoteData {
+    unsigned midiChannel    : 4;
+    unsigned opl3Channel    : 5;
+    unsigned midiNote       : 7;
+} NoteData;
+
+NoteData g_playingNotes[OPL3_NUMBER_OF_CHANNELS];
+
 /*
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
     routine just buffers the incoming data.
@@ -60,19 +69,9 @@ void receiveMpu401Data()
         0, {0, 0}
     };
 
-    /*
-    noInterrupts();
-    if (handlingMpu401Input) {
-        // Don't enter this routine asynchronously if it's already running!
-        interrupts();
-        return;
-    }
-    handlingMpu401Input = true;
-    interrupts();
-    */
+    isrBegin();
 
     while (mpu401.canRead()) {
-
         data = mpu401.readData();
 
         if (data & 0x80) {
@@ -93,6 +92,7 @@ void receiveMpu401Data()
         expectedLength = getExpectedMidiMessageLength(message.status);
 
         if (expectedLength == 0) {
+            Serial.println("Not supported - ignoring");
             // Not a supported message - ignore it and wait for the next
             // status byte
             message.status = 0;
@@ -103,11 +103,8 @@ void receiveMpu401Data()
             length = 1;
         }
     }
-/*
-    noInterrupts();
-    handlingMpu401Input = false;
-    interrupts();
-    */
+
+    isrEnd();
 }
 
 uint8_t ch;
@@ -157,23 +154,8 @@ void setup()
     #define TEST_OP1     32
     #define TEST_OP2     35
 
-    ch = opl3Synth.allocateChannel(Melody2OpChannelType);
+//    ch = opl3Synth.allocateChannel(Melody2OpChannelType);
 
-    opl3Synth.enableSustain(ch, 0);
-    opl3Synth.setFrequencyMultiplicationFactor(ch, 0, 1);
-    opl3Synth.setAttenuation(ch, 0, 16);
-    opl3Synth.setAttackRate(ch, 0, 15);
-    opl3Synth.setDecayRate(ch, 0, 0);
-    opl3Synth.setSustainLevel(ch, 0, 7);
-    opl3Synth.setReleaseRate(ch, 0, 7);
-
-    opl3Synth.enableSustain(ch, 1);
-    opl3Synth.setFrequencyMultiplicationFactor(ch, 1, 1);
-    opl3Synth.setAttenuation(ch, 1, 16);
-    opl3Synth.setAttackRate(ch, 1, 15);
-    opl3Synth.setDecayRate(ch, 1, 0);
-    opl3Synth.setSustainLevel(ch, 1, 7);
-    opl3Synth.setReleaseRate(ch, 1, 6);
 
     /*
     opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_A, 0x21);
@@ -189,8 +171,17 @@ void setup()
     opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_C, 0x30);
     */
 
-    // panning
-    opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_C, 0x30);
+    // panning - TODO
+    for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+        opl3.writeChannel(i, OPL3_CHANNEL_REGISTER_C, 0x30);
+    }
+
+    // Note allocation
+    for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+        g_playingNotes[i].midiChannel = 0;
+        g_playingNotes[i].opl3Channel = 31; // Not a valid channel
+        g_playingNotes[i].midiNote = 0;
+    }
 
     Serial.println("\nReady!\n");
 }
@@ -283,6 +274,9 @@ void serviceMidiInput()
     uint8_t block;
     uint8_t byte_b0;
 
+    int noteSlot = -1;
+    uint8_t opl3Channel = OPL3_INVALID_CHANNEL;
+
     #ifndef USE_MPU401_INTERRUPTS
     digitalWrite(3, HIGH);
     if (mpu401.canRead()) {
@@ -295,7 +289,8 @@ void serviceMidiInput()
     while (midiBuffer.hasContent()) {
         noData = 0;
         hasData = true;
-        /*
+
+    /*
         Serial.print(midiBuffer.usage());
         Serial.print(" -- ");
         */
@@ -310,21 +305,103 @@ void serviceMidiInput()
             */
 
             if (message.status == 0x90) {
+                noteSlot = -1;
+                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                    if (g_playingNotes[i].opl3Channel == 31) {
+                        noteSlot = i;
+                    }
+                }
+
+                if (noteSlot == -1) {
+                    Serial.println("No free note slots!");
+                    continue;
+                }
+
+                opl3Channel = opl3Synth.allocateChannel(Melody2OpChannelType);
+                if (opl3Channel == OPL3_INVALID_CHANNEL) {
+                    Serial.println("Cannot allocate OPL3 channel");
+                    continue;
+                }
+
+                opl3Synth.enableSustain(opl3Channel, 0);
+                opl3Synth.setFrequencyMultiplicationFactor(opl3Channel, 0, 1);
+                opl3Synth.setAttenuation(opl3Channel, 0, 16);
+                opl3Synth.setAttackRate(opl3Channel, 0, 15);
+                opl3Synth.setDecayRate(opl3Channel, 0, 0);
+                opl3Synth.setSustainLevel(opl3Channel, 0, 7);
+                opl3Synth.setReleaseRate(opl3Channel, 0, 7);
+
+                opl3Synth.enableSustain(opl3Channel, 1);
+                opl3Synth.setFrequencyMultiplicationFactor(opl3Channel, 1, 1);
+                opl3Synth.setAttenuation(opl3Channel, 1, 16);
+                opl3Synth.setAttackRate(opl3Channel, 1, 15);
+                opl3Synth.setDecayRate(opl3Channel, 1, 0);
+                opl3Synth.setSustainLevel(opl3Channel, 1, 7);
+                opl3Synth.setReleaseRate(opl3Channel, 1, 6);
+
+                g_playingNotes[noteSlot].midiChannel = 0;
+                g_playingNotes[noteSlot].opl3Channel = opl3Channel;
+                g_playingNotes[noteSlot].midiNote = message.data[0];
+
                 if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
+                    /*
                     Serial.print("Block ");
                     Serial.print(block, DEC);
                     Serial.print(" - FNum ");
                     Serial.println(fnum, DEC);
+                    */
                     byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
                 }
 
-                opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_A, fnum);
-                opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                /*
+                Serial.print("ON ");
+                Serial.print(opl3Channel, DEC);
+                Serial.print(" ");
+                Serial.println(message.data[0], DEC);
+                */
+                opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_A, fnum);
+                opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
             } else if (message.status == 0x80) {
-                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
-                    byte_b0 = (fnum >> 8) | (block << 2);
-                    opl3.writeChannel(ch, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                noteSlot = -1;
+
+                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                    if ((g_playingNotes[i].midiNote == message.data[0])
+                        && (g_playingNotes[i].opl3Channel != 31)) {
+                        noteSlot = i;
+                        break;
+                    }
                 }
+
+                if (noteSlot == -1) {
+                    Serial.println("Note slot not allocated");
+                    continue;
+                }
+
+                opl3Channel = g_playingNotes[noteSlot].opl3Channel;
+                if (opl3Channel == OPL3_INVALID_CHANNEL) {
+                    Serial.println("Invalid OPL3 channel");
+                    continue;
+                }
+
+                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
+                    /*
+                    Serial.print("OFF ");
+                    Serial.print(opl3Channel, DEC);
+                    Serial.print(" ");
+                    Serial.println(message.data[0], DEC);
+                    */
+                    byte_b0 = (fnum >> 8) | (block << 2);
+                    opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                } else {
+                    Serial.println("Error in calcFrequencyAndBlock!");
+                }
+
+                opl3Synth.freeChannel(opl3Channel);
+
+                // TODO: Shuffle along
+                g_playingNotes[noteSlot].midiChannel = 0;
+                g_playingNotes[noteSlot].opl3Channel = 31;
+                g_playingNotes[noteSlot].midiNote = 0;
             }
         }
         //Serial.print(getMidiMessage(), HEX);
