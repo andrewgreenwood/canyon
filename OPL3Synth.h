@@ -31,7 +31,7 @@ enum OPL3ChannelType {
     HiHatChannelType
 };
 
-class OPL3Synth {
+class __attribute__((packed)) OPL3Synth {
     public:
         OPL3Synth(
             OPL3 &opl3);
@@ -98,6 +98,11 @@ class OPL3Synth {
             uint8_t operatorIndex,
             uint8_t rate);
 
+        bool setWaveform(
+            uint8_t channel,
+            uint8_t operatorIndex,
+            uint8_t waveform);
+
         //    private:
         OPL3ChannelType getChannelType(
             uint8_t channel) const;
@@ -126,8 +131,8 @@ class OPL3Synth {
 
         OPL3Operator m_operators[38];
 
-        // TODO: Turn this into a bitmap to save space
-        bool m_channelBusy[OPL3_MAX_CHANNEL + 1];
+        // Each bit represents whether a channel has been allocated or not
+        unsigned m_channelBusyBitmap : 18;
 
         unsigned m_channel0_4op     : 1;
         unsigned m_channel1_4op     : 1;

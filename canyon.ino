@@ -7,8 +7,11 @@
     Designed for Yamaha Audician sound card
 */
 
-// This is very broken at the moment
+// Undefine to use polling
 #define USE_MPU401_INTERRUPTS
+
+// Define this to have serial output
+//#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -57,8 +60,6 @@ NoteData g_playingNotes[OPL3_NUMBER_OF_CHANNELS];
     routine just buffers the incoming data.
 */
 
-volatile bool handlingMpu401Input = false;
-
 void receiveMpu401Data()
 {
     uint8_t data;
@@ -92,7 +93,9 @@ void receiveMpu401Data()
         expectedLength = getExpectedMidiMessageLength(message.status);
 
         if (expectedLength == 0) {
+            #ifdef WITH_SERIAL
             Serial.println("Not supported - ignoring");
+            #endif
             // Not a supported message - ignore it and wait for the next
             // status byte
             message.status = 0;
@@ -109,69 +112,60 @@ void receiveMpu401Data()
     isrEnd();
 }
 
-uint8_t ch;
-
 void setup()
 {
     pinMode(3, OUTPUT); // Debugging LED
 
+#ifdef WITH_SERIAL
     Serial.begin(9600);
     Serial.println("Canyon\n------");
-
     Serial.print("Initialising OPL3SA... ");
+#endif
+
     if (!opl3sa.init(mpu401IoBaseAddress, mpu401IRQ, opl3IoBaseAddress)) {
+#ifdef WITH_SERIAL
         Serial.println("Failed");
+#endif
         for (;;) {}
     }
+#ifdef WITH_SERIAL
     Serial.println("Done");
-
     Serial.print("Initialising OPL3... ");
+#endif
     if (!opl3.detect()) {
+#ifdef WITH_SERIAL
         Serial.println("Failed to detect");
+#endif
         for (;;) {}
     }
     opl3.reset();
+#ifdef WITH_SERIAL
     Serial.println("Done");
-
     Serial.print("Initialising MPU-401... ");
+#endif
     mpu401.init(mpu401IoBaseAddress);
     if (!mpu401.reset()) {
+#ifdef WITH_SERIAL
         Serial.println("Failed");
+#endif
         for (;;) {}
     }
+#ifdef WITH_SERIAL
     Serial.println("Done");
+#endif
 
     // Set up interrupt handling for the MPU-401 now (after init)
-    #ifdef USE_MPU401_INTERRUPTS
+#ifdef USE_MPU401_INTERRUPTS
+#ifdef WITH_SERIAL
     Serial.println("Interrupt mode ENABLED");
+#endif
     pinMode(mpu401IntPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(mpu401IntPin), receiveMpu401Data, RISING);
-    #else
+#else
+#ifdef WITH_SERIAL
     Serial.println("Interrupt mode NOT ENABLED");
-    #endif
-
-    // Set up some initial sound to play with
-    // 17 32 35
-    #define TEST_CHANNEL 17
-    #define TEST_OP1     32
-    #define TEST_OP2     35
-
-//    ch = opl3Synth.allocateChannel(Melody2OpChannelType);
-
-
-    /*
-    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_A, 0x21);
-    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_B, 0x18);
-    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_C, 0xf0);
-    opl3.writeOperator(TEST_OP1, OPL3_OPERATOR_REGISTER_D, 0x77);
-
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_A, 0x21);
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_B, 0x10);
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_C, 0xf0);
-    opl3.writeOperator(TEST_OP2, OPL3_OPERATOR_REGISTER_D, 0x7f);
-
-    opl3.writeChannel(TEST_CHANNEL, OPL3_CHANNEL_REGISTER_C, 0x30);
-    */
+#endif
+#endif
 
     // panning - TODO
     for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
@@ -185,7 +179,9 @@ void setup()
         g_playingNotes[i].midiNote = 0;
     }
 
+#ifdef WITH_SERIAL
     Serial.println("\nReady!\n");
+#endif
 }
 
 uint16_t frequencyToFnum(
@@ -266,50 +262,41 @@ bool calcFrequencyAndBlock(
     return true;
 }
 
-uint16_t noData = 0;
-
 void printMidiMessage(
     struct MIDIMessage &message)
 {
+#ifdef WITH_SERIAL
     Serial.print(message.status, HEX);
     Serial.print(" ");
     Serial.print(message.data[0], HEX);
     Serial.print(" ");
     Serial.print(message.data[1], HEX);
     Serial.print("\n");
+#endif
 }
 
 void serviceMidiInput()
 {
-    bool hasData = false;
     struct MIDIMessage message;
     uint16_t fnum;
     uint8_t block;
     uint8_t byte_b0;
+    uint8_t channel;
 
     int noteSlot = -1;
     uint8_t opl3Channel = OPL3_INVALID_CHANNEL;
 
     #ifndef USE_MPU401_INTERRUPTS
-    digitalWrite(3, HIGH);
     if (mpu401.canRead()) {
-        digitalWrite(3, LOW);
-        noData = 0;
         receiveMpu401Data();
     }
     #endif
 
     while (midiBuffer.hasContent()) {
-        noData = 0;
-        hasData = true;
-
-    /*
-        Serial.print(midiBuffer.usage());
-        Serial.print(" -- ");
-        */
         if (midiBuffer.get(message)) {
+            channel = message.status & 0x0f;
 
-            if (message.status == 0x90) {
+            if ((message.status & 0xf0) == 0x90) {
                 noteSlot = -1;
                 for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
                     if (g_playingNotes[i].opl3Channel == 31) {
@@ -344,33 +331,22 @@ void serviceMidiInput()
                 opl3Synth.setSustainLevel(opl3Channel, 1, 7);
                 opl3Synth.setReleaseRate(opl3Channel, 1, 4);
 
-                g_playingNotes[noteSlot].midiChannel = 0;
+                g_playingNotes[noteSlot].midiChannel = channel;
                 g_playingNotes[noteSlot].opl3Channel = opl3Channel;
                 g_playingNotes[noteSlot].midiNote = message.data[0];
 
                 if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
-                    /*
-                    Serial.print("Block ");
-                    Serial.print(block, DEC);
-                    Serial.print(" - FNum ");
-                    Serial.println(fnum, DEC);
-                    */
                     byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
                 }
 
-                /*
-                Serial.print("ON ");
-                Serial.print(opl3Channel, DEC);
-                Serial.print(" ");
-                Serial.println(message.data[0], DEC);
-                */
                 opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_A, fnum);
                 opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
-            } else if (message.status == 0x80) {
+            } else if ((message.status & 0xf0) == 0x80) {
                 noteSlot = -1;
 
                 for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
                     if ((g_playingNotes[i].midiNote == message.data[0])
+                        && (g_playingNotes[i].midiChannel == channel)
                         && (g_playingNotes[i].opl3Channel != 31)) {
                         noteSlot = i;
                         break;
@@ -379,27 +355,24 @@ void serviceMidiInput()
 
                 if (noteSlot == -1) {
                     //Serial.println("Note slot not allocated");
-                    //printMidiMessage(message);
                     continue;
                 }
 
                 opl3Channel = g_playingNotes[noteSlot].opl3Channel;
                 if (opl3Channel == OPL3_INVALID_CHANNEL) {
+#ifdef WITH_SERIAL
                     Serial.println("Invalid OPL3 channel");
                     continue;
+#endif
                 }
 
                 if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
-                    /*
-                    Serial.print("OFF ");
-                    Serial.print(opl3Channel, DEC);
-                    Serial.print(" ");
-                    Serial.println(message.data[0], DEC);
-                    */
                     byte_b0 = (fnum >> 8) | (block << 2);
                     opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
                 } else {
+#ifdef WITH_SERIAL
                     Serial.println("Error in calcFrequencyAndBlock!");
+#endif
                 }
 
                 opl3Synth.freeChannel(opl3Channel);
@@ -408,15 +381,18 @@ void serviceMidiInput()
                 g_playingNotes[noteSlot].midiChannel = 0;
                 g_playingNotes[noteSlot].opl3Channel = 31;
                 g_playingNotes[noteSlot].midiNote = 0;
+            } else if ((message.status & 0xf0) == 0xb0) {
+                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                    if ((g_playingNotes[i].midiChannel == channel)
+                        && (g_playingNotes[i].opl3Channel != 31)) {
+                        if (message.data[0] == 37) {
+                            opl3Synth.setWaveform(g_playingNotes[i].opl3Channel, 1, message.data[1] / 16);
+                        }
+                    }
+                }
             }
         }
-        //Serial.print(getMidiMessage(), HEX);
     }
-
-    if (hasData) {
-//        Serial.println("");
-    }
-
 }
 
 void loop()

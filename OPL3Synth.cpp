@@ -15,9 +15,7 @@ OPL3Synth::OPL3Synth(
     unsigned int i;
     // TODO: Initialise operators
 
-    for (i = 0; i <= OPL3_MAX_CHANNEL; ++ i) {
-        m_channelBusy[i] = false;
-    }
+    m_channelBusyBitmap = 0;
 }
 
 uint8_t OPL3Synth::allocateChannel(
@@ -28,7 +26,8 @@ uint8_t OPL3Synth::allocateChannel(
     channel = findAvailableChannel(type);
 
     if (channel != OPL3_INVALID_CHANNEL) {
-        m_channelBusy[channel] = true;
+        //m_channelBusy[channel] = true;
+        m_channelBusyBitmap |= 1 << channel;
     }
 
     return channel;
@@ -41,11 +40,13 @@ bool OPL3Synth::freeChannel(
         return false;
     }
 
-    if (!m_channelBusy[channel]) {
+    // TODO: Validate arg in range etc.
+
+    if ((1L << channel & m_channelBusyBitmap) == 0) {
         return false;
     }
 
-    m_channelBusy[channel] = false;
+    m_channelBusyBitmap &= ~(1L << channel);
 
     return true;
 }
@@ -69,31 +70,31 @@ uint8_t OPL3Synth::findAvailableChannel(
             break;
 
         case KickChannelType:
-            if ((m_percussionMode) && (!m_channelBusy[OPL3_KICK_CHANNEL])) {
+            if ((m_percussionMode) && (!isAllocatedChannel(OPL3_KICK_CHANNEL))) {
                 return OPL3_KICK_CHANNEL;
             }
             return OPL3_INVALID_CHANNEL;
 
         case SnareChannelType:
-            if ((m_percussionMode) && (!m_channelBusy[OPL3_SNARE_CHANNEL])) {
+            if ((m_percussionMode) && (!isAllocatedChannel(OPL3_SNARE_CHANNEL))) {
                 return OPL3_SNARE_CHANNEL;
             }
             return OPL3_INVALID_CHANNEL;
 
         case TomTomChannelType:
-            if ((m_percussionMode) && (!m_channelBusy[OPL3_TOMTOM_CHANNEL])) {
+            if ((m_percussionMode) && (!isAllocatedChannel(OPL3_TOMTOM_CHANNEL))) {
                 return OPL3_TOMTOM_CHANNEL;
             }
             return OPL3_INVALID_CHANNEL;
 
         case CymbalChannelType:
-            if ((m_percussionMode) && (!m_channelBusy[OPL3_CYMBAL_CHANNEL])) {
+            if ((m_percussionMode) && (!isAllocatedChannel(OPL3_CYMBAL_CHANNEL))) {
                 return OPL3_CYMBAL_CHANNEL;
             }
             return OPL3_INVALID_CHANNEL;
 
         case HiHatChannelType:
-            if ((m_percussionMode) && (!m_channelBusy[OPL3_HIHAT_CHANNEL])) {
+            if ((m_percussionMode) && (!isAllocatedChannel(OPL3_HIHAT_CHANNEL))) {
                 return OPL3_HIHAT_CHANNEL;
             }
             return OPL3_INVALID_CHANNEL;
@@ -115,7 +116,7 @@ uint8_t OPL3Synth::findAvailableChannel(
             }
         }
 
-        if ((!m_channelBusy[i]) && (getChannelType(i) == type)) {
+        if ((!isAllocatedChannel(i)) && (getChannelType(i) == type)) {
             return i;
         }
     }
@@ -366,6 +367,29 @@ bool OPL3Synth::setReleaseRate(
     return updateOperator(channelOperator, OPL3_OPERATOR_REGISTER_D);
 }
 
+bool OPL3Synth::setWaveform(
+    uint8_t channel,
+    uint8_t operatorIndex,
+    uint8_t waveform)
+{
+    uint8_t channelOperator;
+
+    if (!isAllocatedChannel(channel)) {
+        return false;
+    }
+
+    channelOperator = getChannelOperator(channel, operatorIndex);
+    if (channelOperator == OPL3_INVALID_OPERATOR) {
+        return false;
+    }
+
+    if (!m_operators[channelOperator].setWaveform(waveform)) {
+        return false;
+    }
+
+    return updateOperator(channelOperator, OPL3_OPERATOR_REGISTER_E);
+}
+
 OPL3ChannelType OPL3Synth::getChannelType(
     uint8_t channel) const
 {
@@ -472,7 +496,7 @@ bool OPL3Synth::isValidChannel(
 bool OPL3Synth::isAllocatedChannel(
     uint8_t channel) const
 {
-    return ((isValidChannel(channel)) && (m_channelBusy[channel]));
+    return ((isValidChannel(channel)) && (1L << channel & m_channelBusyBitmap));
 }
 
 unsigned int OPL3Synth::getOperatorCount(
@@ -571,7 +595,7 @@ bool OPL3Synth::updateOperator(
             break;
 
         case OPL3_OPERATOR_REGISTER_E:
-            //value = op.getWaveform();
+            value = op.getWaveform() & 0x07;
             break;
 
         default:

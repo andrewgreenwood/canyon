@@ -173,6 +173,11 @@ bool OPL3::writeOperator(
         registerOffset += 2;
     }
 
+    if (registerId == OPL3_OPERATOR_REGISTER_E) {
+        Serial.println(registerId | registerOffset, HEX);
+        Serial.println(data, HEX);
+    }
+
     writeData(operatorNumber < OPL3_NUMBER_OF_OPERATORS / 2,
               registerId | registerOffset,
               data);

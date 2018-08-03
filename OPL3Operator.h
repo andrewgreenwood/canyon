@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-class OPL3Operator {
+class __attribute__((packed)) OPL3Operator {
     public:
         OPL3Operator()
         : m_attackRate(0), m_decayRate(0), m_sustainLevel(0), m_releaseRate(0)
@@ -124,7 +124,19 @@ class OPL3Operator {
         uint8_t getReleaseRate()
         { return m_releaseRate; }
 
-        // TODO: Waveform
+        bool setWaveform(
+            uint8_t waveform)
+        {
+            if (waveform > 7) {
+                return false;
+            }
+
+            m_waveform = waveform;
+            return true;
+        }
+
+        uint8_t getWaveform()
+        { return m_waveform; }
 
     private:
         unsigned m_sustain          : 1;
