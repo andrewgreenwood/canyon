@@ -71,6 +71,7 @@ void receiveMpu401Data()
 
     isrBegin();
 
+    digitalWrite(3, HIGH);
     while (mpu401.canRead()) {
         data = mpu401.readData();
 
@@ -80,7 +81,6 @@ void receiveMpu401Data()
             length = 1;
         } else if (message.status == 0) {
             // Unknown status - skip
-            digitalWrite(3, HIGH);
             continue;
         } else {
             // Data byte
@@ -103,6 +103,8 @@ void receiveMpu401Data()
             length = 1;
         }
     }
+
+    digitalWrite(3, LOW);
 
     isrEnd();
 }
@@ -316,13 +318,13 @@ void serviceMidiInput()
                 }
 
                 if (noteSlot == -1) {
-                    Serial.println("No free note slots!");
+                    //Serial.println("No free note slots!");
                     continue;
                 }
 
                 opl3Channel = opl3Synth.allocateChannel(Melody2OpChannelType);
                 if (opl3Channel == OPL3_INVALID_CHANNEL) {
-                    Serial.println("Cannot allocate OPL3 channel");
+                    //Serial.println("Cannot allocate OPL3 channel");
                     continue;
                 }
 
@@ -332,7 +334,7 @@ void serviceMidiInput()
                 opl3Synth.setAttackRate(opl3Channel, 0, 15);
                 opl3Synth.setDecayRate(opl3Channel, 0, 0);
                 opl3Synth.setSustainLevel(opl3Channel, 0, 7);
-                opl3Synth.setReleaseRate(opl3Channel, 0, 7);
+                opl3Synth.setReleaseRate(opl3Channel, 0, 4);
 
                 opl3Synth.enableSustain(opl3Channel, 1);
                 opl3Synth.setFrequencyMultiplicationFactor(opl3Channel, 1, 1);
@@ -340,7 +342,7 @@ void serviceMidiInput()
                 opl3Synth.setAttackRate(opl3Channel, 1, 15);
                 opl3Synth.setDecayRate(opl3Channel, 1, 0);
                 opl3Synth.setSustainLevel(opl3Channel, 1, 7);
-                opl3Synth.setReleaseRate(opl3Channel, 1, 6);
+                opl3Synth.setReleaseRate(opl3Channel, 1, 4);
 
                 g_playingNotes[noteSlot].midiChannel = 0;
                 g_playingNotes[noteSlot].opl3Channel = opl3Channel;
@@ -376,8 +378,8 @@ void serviceMidiInput()
                 }
 
                 if (noteSlot == -1) {
-                    Serial.println("Note slot not allocated");
-                    printMidiMessage(message);
+                    //Serial.println("Note slot not allocated");
+                    //printMidiMessage(message);
                     continue;
                 }
 

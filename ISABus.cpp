@@ -15,7 +15,10 @@
 #include "ISRState.h"
 
 #define USE_SPI         1
-#define ISA_IO_WAIT     200
+#define ISA_IOR_DELAY   10
+#define ISA_IOW_DELAY   10
+#define ISA_PRE_DELAY   10
+#define ISA_POST_DELAY  10
 #define DO_LSB          1
 
 ISABus::ISABus(
@@ -105,10 +108,14 @@ void ISABus::write(
     digitalWrite(m_latchPin, LOW);
     digitalWrite(m_latchPin, HIGH);
 
+    delayMicroseconds(ISA_PRE_DELAY);
+
     // Lower the IOW pin on the ISA bus to indicate we're writing data
     digitalWrite(m_ioWritePin, LOW);
-    delayMicroseconds(ISA_IO_WAIT);
+    delayMicroseconds(ISA_IOR_DELAY);
     digitalWrite(m_ioWritePin, HIGH);
+
+    delayMicroseconds(ISA_POST_DELAY);
 
 #ifdef USE_SPI
     SPI.endTransaction();
@@ -158,11 +165,13 @@ uint8_t ISABus::read(
     // Put the data shift register into 'load' mode
     digitalWrite(m_loadPin, HIGH);
 
+    delayMicroseconds(ISA_PRE_DELAY);
+
     // Lower the IOR pin on the ISA bus to indicate we want to read data
     digitalWrite(m_ioReadPin, LOW);
 
     // Give the device some time to respond
-    delayMicroseconds(ISA_IO_WAIT);
+    delayMicroseconds(ISA_IOR_DELAY);
 
     // Load the data from the ISA data pins into the universal shift register
 #ifdef USE_SPI
@@ -174,6 +183,8 @@ uint8_t ISABus::read(
 
     // Stop writing
     digitalWrite(m_ioReadPin, HIGH);
+
+    delayMicroseconds(ISA_POST_DELAY);
 
     // Put the data shift register into 'shift' mode
     digitalWrite(m_loadPin, LOW);
