@@ -58,14 +58,14 @@ class ISABus {
             uint16_t address) const;
 
     private:
-        uint8_t m_outputPin;
-        uint8_t m_inputPin;
-        uint8_t m_clockPin;
-        uint8_t m_latchPin;
-        uint8_t m_loadPin;
-        uint8_t m_ioWritePin;
-        uint8_t m_ioReadPin;
-        uint8_t m_resetPin;
+        unsigned m_outputPin    : 4;
+        unsigned m_inputPin     : 4;
+        unsigned m_clockPin     : 4;
+        unsigned m_latchPin     : 4;
+        unsigned m_loadPin      : 4;
+        unsigned m_ioWritePin   : 4;
+        unsigned m_ioReadPin    : 4;
+        unsigned m_resetPin     : 4;
 };
 #endif
 
