@@ -25,6 +25,16 @@
 
     See the comments for the ISABus constructor arguments regarding the pins
     that the Arduino is required to connect to.
+
+    Originally this was written to use "bit-banging", it has since been updated
+    to use SPI. The relevant pins to use are:
+
+    10 / SS   - Not used (is set as an OUTPUT)
+    11 / MOSI - outputPin
+    12 / MISO - inputPin
+    13 / SCK  - clockPin
+
+    Eventually the above pins will be used implicitly by this component.
 */
 
 #ifndef ISABUS_H
