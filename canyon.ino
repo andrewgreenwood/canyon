@@ -17,10 +17,9 @@
 #include "ISABus.h"
 #include "OPL3SA.h"
 #include "MPU401.h"
-#include "OPL3.h"
+#include "OPL3Hardware.h"
 #include "MIDIBuffer.h"
 #include "MIDI.h"
-#include "OPL3Synth.h"
 #include "ISRState.h"
 
 const uint16_t mpu401IoBaseAddress  = 0x330;
@@ -42,8 +41,7 @@ ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
-OPL3 opl3(isaBus, opl3IoBaseAddress);
-OPL3Synth opl3Synth(opl3);
+OPL3::Hardware opl3(isaBus, opl3IoBaseAddress);
 
 MIDIBuffer midiBuffer;
 
@@ -53,7 +51,7 @@ typedef struct __attribute__((packed)) NoteData {
     unsigned midiNote       : 7;
 } NoteData;
 
-NoteData g_playingNotes[OPL3_NUMBER_OF_CHANNELS];
+NoteData g_playingNotes[OPL3::NumberOfChannels];
 
 /*
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
@@ -168,12 +166,12 @@ void setup()
 #endif
 
     // panning - TODO
-    for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
-        opl3.writeChannel(i, OPL3_CHANNEL_REGISTER_C, 0x30);
+    for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+        opl3.setChannelRegister(i, OPL3::ChannelRegisterC, 0x30);
     }
 
     // Note allocation
-    for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+    for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
         g_playingNotes[i].midiChannel = 0;
         g_playingNotes[i].opl3Channel = 31; // Not a valid channel
         g_playingNotes[i].midiNote = 0;
@@ -182,84 +180,6 @@ void setup()
 #ifdef WITH_SERIAL
     Serial.println("\nReady!\n");
 #endif
-}
-
-uint16_t frequencyToFnum(
-    uint32_t freqHundredths,
-    uint8_t block)
-{
-    if (freqHundredths < 3) {
-        return 0;
-    } else if (freqHundredths > 620544) {
-        return 1023;
-    }
-
-    return (freqHundredths * (524288L >> block)) / 2485800;
-}
-
-uint8_t frequencyToBlock(
-    uint32_t freqHundredths)
-{
-    // The maximum frequency doubles each time the block number increases.
-    // We start with 48.48Hz and try to find the lowest block that can
-    // represent the desired frequency, for the greatest accuracy.
-    uint8_t block;
-    uint32_t maxFreq = 4848;
-
-    for (block = 0; block < 7; ++ block) {
-        if (freqHundredths < maxFreq) {
-            return block;
-        }
-
-        maxFreq <<= 1;
-    }
-
-    return block;
-}
-
-bool calcFrequencyAndBlock(
-    uint8_t note,
-    uint16_t *frequency,
-    uint8_t *block)
-{
-    int8_t octave;
-    uint32_t freqHundredth;
-    uint32_t multiplier;
-
-    // Frequencies in octave 0
-    const uint16_t noteFrequencies[12] = {
-        1635,
-        1732,
-        1835,
-        1945,
-        2060,
-        2183,
-        2312,
-        2450,
-        2596,
-        2750,
-        2914,
-        3087
-    };
-
-    if (note > 115) {
-        *frequency = 1023;
-        *block = 7;
-        return false;
-    }
-
-    octave = (note / 12) - 1;
-    if (octave >= 0) {
-        multiplier = 1 << octave;
-        freqHundredth = noteFrequencies[note % 12] * multiplier;
-    } else {
-        freqHundredth = noteFrequencies[note % 12] / 2;
-    }
-
-    *block = frequencyToBlock(freqHundredth);
-    *frequency = frequencyToFnum(freqHundredth, *block);
-
-    return true;
 }
 
 void printMidiMessage(
@@ -278,13 +198,14 @@ void printMidiMessage(
 void serviceMidiInput()
 {
     struct MIDIMessage message;
+    uint32_t freq;
     uint16_t fnum;
     uint8_t block;
     uint8_t byte_b0;
     uint8_t channel;
 
     int noteSlot = -1;
-    uint8_t opl3Channel = OPL3_INVALID_CHANNEL;
+    uint8_t opl3Channel = OPL3::InvalidChannel;
 
     #ifndef USE_MPU401_INTERRUPTS
     if (mpu401.canRead()) {
@@ -298,7 +219,7 @@ void serviceMidiInput()
 
             if ((message.status & 0xf0) == 0x90) {
                 noteSlot = -1;
-                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
                     if (g_playingNotes[i].opl3Channel == 31) {
                         noteSlot = i;
                     }
@@ -309,42 +230,38 @@ void serviceMidiInput()
                     continue;
                 }
 
-                opl3Channel = opl3Synth.allocateChannel(Melody2OpChannelType);
-                if (opl3Channel == OPL3_INVALID_CHANNEL) {
+                opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
+                if (opl3Channel == OPL3::InvalidChannel) {
                     //Serial.println("Cannot allocate OPL3 channel");
                     continue;
                 }
 
-                opl3Synth.enableSustain(opl3Channel, 0);
-                opl3Synth.setFrequencyMultiplicationFactor(opl3Channel, 0, 1);
-                opl3Synth.setAttenuation(opl3Channel, 0, 16);
-                opl3Synth.setAttackRate(opl3Channel, 0, 15);
-                opl3Synth.setDecayRate(opl3Channel, 0, 0);
-                opl3Synth.setSustainLevel(opl3Channel, 0, 7);
-                opl3Synth.setReleaseRate(opl3Channel, 0, 4);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterA, 0x21);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterB, 0x10);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterC, 0xf0);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterD, 0x74);
 
-                opl3Synth.enableSustain(opl3Channel, 1);
-                opl3Synth.setFrequencyMultiplicationFactor(opl3Channel, 1, 1);
-                opl3Synth.setAttenuation(opl3Channel, 1, 16);
-                opl3Synth.setAttackRate(opl3Channel, 1, 15);
-                opl3Synth.setDecayRate(opl3Channel, 1, 0);
-                opl3Synth.setSustainLevel(opl3Channel, 1, 7);
-                opl3Synth.setReleaseRate(opl3Channel, 1, 4);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterA, 0x21);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterB, 0x10);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterC, 0xf0);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterD, 0x74);
 
                 g_playingNotes[noteSlot].midiChannel = channel;
                 g_playingNotes[noteSlot].opl3Channel = opl3Channel;
                 g_playingNotes[noteSlot].midiNote = message.data[0];
 
-                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
-                    byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
-                }
+                freq = OPL3::getNoteFrequency(message.data[0]);
+                block = OPL3::getFrequencyBlock(freq);
+                fnum = OPL3::getFrequencyFnum(freq, block);
 
-                opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_A, fnum);
-                opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
+                byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
+
+                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterA, fnum);
+                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
             } else if ((message.status & 0xf0) == 0x80) {
                 noteSlot = -1;
 
-                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
                     if ((g_playingNotes[i].midiNote == message.data[0])
                         && (g_playingNotes[i].midiChannel == channel)
                         && (g_playingNotes[i].opl3Channel != 31)) {
@@ -359,34 +276,33 @@ void serviceMidiInput()
                 }
 
                 opl3Channel = g_playingNotes[noteSlot].opl3Channel;
-                if (opl3Channel == OPL3_INVALID_CHANNEL) {
+                if (opl3Channel == OPL3::InvalidChannel) {
 #ifdef WITH_SERIAL
                     Serial.println("Invalid OPL3 channel");
                     continue;
 #endif
                 }
 
-                if (calcFrequencyAndBlock(message.data[0], &fnum, &block)) {
-                    byte_b0 = (fnum >> 8) | (block << 2);
-                    opl3.writeChannel(opl3Channel, OPL3_CHANNEL_REGISTER_B, byte_b0);
-                } else {
-#ifdef WITH_SERIAL
-                    Serial.println("Error in calcFrequencyAndBlock!");
-#endif
-                }
+                freq = OPL3::getNoteFrequency(message.data[0]);
+                block = OPL3::getFrequencyBlock(freq);
+                fnum = OPL3::getFrequencyFnum(freq, block);
 
-                opl3Synth.freeChannel(opl3Channel);
+                byte_b0 = (fnum >> 8) | (block << 2);
+                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+
+                opl3.freeChannel(opl3Channel);
 
                 // TODO: Shuffle along
                 g_playingNotes[noteSlot].midiChannel = 0;
                 g_playingNotes[noteSlot].opl3Channel = 31;
                 g_playingNotes[noteSlot].midiNote = 0;
             } else if ((message.status & 0xf0) == 0xb0) {
-                for (int i = 0; i < OPL3_NUMBER_OF_CHANNELS; ++ i) {
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
                     if ((g_playingNotes[i].midiChannel == channel)
                         && (g_playingNotes[i].opl3Channel != 31)) {
                         if (message.data[0] == 37) {
-                            opl3Synth.setWaveform(g_playingNotes[i].opl3Channel, 1, message.data[1] / 16);
+                            opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterE,
+                                                     message.data[1] / 16);
                         }
                     }
                 }

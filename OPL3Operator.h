@@ -3,9 +3,11 @@
 
 #include <stdint.h>
 
-class __attribute__((packed)) OPL3Operator {
+namespace OPL3 {
+
+class __attribute__((packed)) Operator {
     public:
-        OPL3Operator()
+        Operator()
         : m_attackRate(0), m_decayRate(0), m_sustainLevel(0), m_releaseRate(0)
         // TODO
         {}
@@ -153,5 +155,7 @@ class __attribute__((packed)) OPL3Operator {
 
         unsigned m_waveform         : 3;
 };
+
+}
 
 #endif
