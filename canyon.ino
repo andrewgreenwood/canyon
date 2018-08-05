@@ -11,7 +11,7 @@
 #define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-//#define WITH_SERIAL
+#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -19,6 +19,7 @@
 #include "MPU401.h"
 #include "OPL3Hardware.h"
 #include "MIDIBuffer.h"
+#include "MIDIControl.h"
 #include "MIDI.h"
 #include "ISRState.h"
 
@@ -44,7 +45,9 @@ MPU401 mpu401(isaBus);
 OPL3::Hardware opl3(isaBus, opl3IoBaseAddress);
 
 MIDIBuffer midiBuffer;
+MIDIControl midiControl;
 
+#if 0
 typedef struct __attribute__((packed)) NoteData {
     unsigned midiChannel    : 4;
     unsigned opl3Channel    : 5;
@@ -52,6 +55,7 @@ typedef struct __attribute__((packed)) NoteData {
 } NoteData;
 
 NoteData g_playingNotes[OPL3::NumberOfChannels];
+#endif
 
 /*
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
@@ -171,11 +175,13 @@ void setup()
     }
 
     // Note allocation
+    #if 0
     for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
         g_playingNotes[i].midiChannel = 0;
         g_playingNotes[i].opl3Channel = 31; // Not a valid channel
         g_playingNotes[i].midiNote = 0;
     }
+    #endif
 
 #ifdef WITH_SERIAL
     Serial.println("\nReady!\n");
@@ -195,7 +201,64 @@ void printMidiMessage(
 #endif
 }
 
+
 void serviceMidiInput()
+{
+    struct MIDIMessage message;
+    uint8_t channel;
+
+    while (midiBuffer.hasContent()) {
+        if (midiBuffer.get(message)) {
+            channel = message.status & 0x0f;
+
+            switch (message.status & 0xf0) {
+                case 0x80:
+                    // Note off
+                    printMidiMessage(message);
+                    midiControl.stopNote(channel, message.noteData.note);
+                    break;
+
+                case 0x90:
+                    // Note on
+                    printMidiMessage(message);
+                    midiControl.playNote(channel,
+                                         message.noteData.note,
+                                         message.noteData.velocity);
+                    break;
+
+                case 0xb0:
+                    // Control change
+                    printMidiMessage(message);
+                    midiControl.setController(channel,
+                                              message.controllerData.controller,
+                                              message.controllerData.value);
+                    break;
+
+                case 0xc0:
+                    // Program change
+                    printMidiMessage(message);
+                    midiControl.setProgram(channel,
+                                           message.programData.program);
+                    break;
+
+                case 0xe0:
+                    // Pitch bend
+                    printMidiMessage(message);
+                    //midiControl.bendPitch(channel,
+                                          //message.c
+                    break;
+
+                case 0xf0:
+                    // System
+                    printMidiMessage(message);
+                    break;
+            }
+        }
+    }
+}
+
+#if 0
+void serviceMidiInput_OLD()
 {
     struct MIDIMessage message;
     uint32_t freq;
@@ -310,6 +373,7 @@ void serviceMidiInput()
         }
     }
 }
+#endif
 
 void loop()
 {
