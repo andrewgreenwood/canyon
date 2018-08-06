@@ -57,6 +57,10 @@ class MIDIControl {
             uint8_t channel,
             uint8_t &noteIndex) const;
 
+        bool updateChannel(
+            uint8_t channel,
+            uint8_t reg) const;
+
         OPL3::Hardware &m_device;
 
         NoteData m_notes[MIDI_POLYPHONY];

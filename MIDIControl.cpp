@@ -137,9 +137,21 @@ bool MIDIControl::setController(
         return false;
     }
 
-    // Not supported yet
+    switch (controller) {
+        case 10:    // Panning
+            if (value < 42) {
+                m_patches[channel].setOutput(OPL3::LeftOutput);
+            } else if (value < 85) {
+                m_patches[channel].setOutput(OPL3::StereoOutput);
+            } else {
+                m_patches[channel].setOutput(OPL3::RightOutput);
+            }
 
-    return false;
+            return updateChannel(channel, OPL3::ChannelRegisterC);
+
+        default:
+            return false;
+    }
 }
 
 bool MIDIControl::bendPitch(
@@ -180,4 +192,35 @@ bool MIDIControl::findFreeNote(
     }
 
     return false;
+}
+
+bool MIDIControl::updateChannel(
+    uint8_t channel,
+    uint8_t reg)
+{
+    uint8_t i;
+    uint8_t data;
+
+    // TODO: Special case for ChannelRegisterC in 4-op mode where we have to
+    // write to the secondary channel as well
+
+    switch (reg) {
+        case OPL3::ChannelRegisterC:
+            data = (m_patches[channel].getOutput() << 4)
+                 | (m_patches[channel].getFeedbackModulationFactor() << 1)
+                 | (m_patches[channel].getSynthType() & 0x1);   // CHECK ME
+
+            break;
+
+        default:
+            return false;
+    }
+
+    for (i = 0; i < noteIndex; ++ i) {
+        if (m_notes[i].midiChannel == channel) {
+            m_device.setChannelRegister(i, reg, data);
+        }
+    }
+
+    return true;
 }
