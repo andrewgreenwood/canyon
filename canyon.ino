@@ -11,7 +11,7 @@
 #define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-//#define WITH_SERIAL
+#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -136,7 +136,7 @@ void setup()
 #endif
         for (;;) {}
     }
-    opl3.reset();
+    opl3.init();
 #ifdef WITH_SERIAL
     Serial.println("Done");
     Serial.print("Initialising MPU-401... ");
@@ -167,7 +167,7 @@ void setup()
 
     // panning - TODO
     for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
-        opl3.setChannelRegister(i, OPL3::ChannelRegisterC, 0x30);
+        //opl3.setChannelRegister(i, OPL3::ChannelRegisterC, 0x30);
     }
 
     // Note allocation
@@ -230,12 +230,32 @@ void serviceMidiInput()
                     continue;
                 }
 
+                opl3.enablePercussion();
                 opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
+                Serial.println(opl3Channel);
+                //opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
                 if (opl3Channel == OPL3::InvalidChannel) {
                     //Serial.println("Cannot allocate OPL3 channel");
                     continue;
                 }
 
+                opl3.setOutput(opl3Channel, 3);
+
+                opl3.setAttenuation(opl3Channel, 0, 0);
+
+                opl3.setAttackRate(opl3Channel, 0, 15);
+                opl3.setDecayRate(opl3Channel, 0, 2);
+                opl3.setSustainLevel(opl3Channel, 0, 10);
+                opl3.setReleaseRate(opl3Channel, 0, 8);
+
+                opl3.setAttackRate(opl3Channel, 1, 15);
+                opl3.setDecayRate(opl3Channel, 1, 7);
+                opl3.setSustainLevel(opl3Channel, 1, 7);
+                opl3.setReleaseRate(opl3Channel, 1, 4);
+
+                opl3.setSynthType(opl3Channel, 1);
+
+                /*
                 opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterA, 0x21);
                 opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterB, 0x10);
                 opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterC, 0xf0);
@@ -245,6 +265,7 @@ void serviceMidiInput()
                 opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterB, 0x10);
                 opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterC, 0xf0);
                 opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterD, 0x74);
+                */
 
                 g_playingNotes[noteSlot].midiChannel = channel;
                 g_playingNotes[noteSlot].opl3Channel = opl3Channel;
@@ -256,8 +277,10 @@ void serviceMidiInput()
 
                 byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
 
-                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterA, fnum);
-                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+                opl3.setFrequency(opl3Channel, freq);
+                opl3.keyOn(opl3Channel);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterA, fnum);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
             } else if ((message.status & 0xf0) == 0x80) {
                 noteSlot = -1;
 
@@ -288,7 +311,8 @@ void serviceMidiInput()
                 fnum = OPL3::getFrequencyFnum(freq, block);
 
                 byte_b0 = (fnum >> 8) | (block << 2);
-                opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+                opl3.keyOff(opl3Channel);
 
                 opl3.freeChannel(opl3Channel);
 
@@ -301,8 +325,8 @@ void serviceMidiInput()
                     if ((g_playingNotes[i].midiChannel == channel)
                         && (g_playingNotes[i].opl3Channel != 31)) {
                         if (message.data[0] == 37) {
-                            opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterE,
-                                                     message.data[1] / 16);
+                            //opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterE,
+                            //                         message.data[1] / 16);
                         }
                     }
                 }

@@ -57,14 +57,14 @@ typedef enum {
 } OperatorRegister;
 
 typedef enum {
-    NullChannelType = 0,
-    Melody2OpChannelType,
-    Melody4OpChannelType,
-    KickChannelType,
-    SnareChannelType,
-    TomTomChannelType,
-    CymbalChannelType,
-    HiHatChannelType
+    NullChannelType      = 0,
+    Melody2OpChannelType = 1,
+    Melody4OpChannelType = 2,
+    KickChannelType      = 3,
+    SnareChannelType     = 4,
+    TomTomChannelType    = 5,
+    CymbalChannelType    = 6,
+    HiHatChannelType     = 7
 } ChannelType;
 
 
@@ -79,6 +79,8 @@ uint32_t getNoteFrequency(
     uint8_t note);
 
 typedef struct ChannelParameters {
+    unsigned type            : 3;   // See 'ChannelType' enum
+
     unsigned frequencyNumber : 10;
 
     unsigned block           : 3;
@@ -86,7 +88,7 @@ typedef struct ChannelParameters {
 
     unsigned output          : 2;
     unsigned feedbackModulationFactor   : 3;
-    unsigned synthType       : 1;
+    unsigned synthType       : 3;
 } ChannelParameters;
 
 typedef struct OperatorParameters {
@@ -114,13 +116,41 @@ class Hardware {
 
         bool detect() const;
 
-        void reset() const;
+        void init();
+
+        bool enablePercussion();
+
+        bool disablePercussion();
 
         uint8_t allocateChannel(
             ChannelType type);
 
         bool freeChannel(
             uint8_t channel);
+
+        bool setFrequency(
+            uint8_t channel,
+            uint32_t frequency);
+
+        bool keyOn(
+            uint8_t channel);
+
+        bool keyOff(
+            uint8_t channel);
+
+        bool setOutput(
+            uint8_t channel,
+            uint8_t output);
+
+        uint8_t getOutput(
+            uint8_t channel);
+
+        bool setSynthType(
+            uint8_t channel,
+            uint8_t type);
+
+        uint8_t getSynthType(
+            uint8_t channel) const;
 
         bool setAttackRate(
             uint8_t channel,
@@ -131,22 +161,46 @@ class Hardware {
             uint8_t channel,
             uint8_t channelOperator);
 
-        bool setChannelRegister(
+        bool setDecayRate(
             uint8_t channel,
-            ChannelRegister reg,
-            uint8_t data) const;
+            uint8_t channelOperator,
+            uint8_t rate);
 
-        bool setOperatorRegister(
+        uint8_t getDecayRate(
             uint8_t channel,
-            uint8_t operatorIndex,
-            OperatorRegister reg,
-            uint8_t data) const;
+            uint8_t channelOperator);
+
+        bool setSustainLevel(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t level);
+
+        uint8_t getSustainLevel(
+            uint8_t channel,
+            uint8_t channelOperator);
+
+        bool setReleaseRate(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t rate);
+
+        uint8_t getReleaseRate(
+            uint8_t channel,
+            uint8_t channelOperator);
+
+        bool setAttenuation(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t attenuation);
 
     private:
         ChannelType getChannelType(
             uint8_t channel) const;
 
         bool isValidChannel(
+            uint8_t channel) const;
+
+        bool isPhysicalChannel(
             uint8_t channel) const;
 
         bool isAllocatedChannel(
@@ -166,15 +220,13 @@ class Hardware {
             GlobalRegister reg,
             uint8_t data) const;
 
-        bool writeChannelRegister(
+        bool commitChannelData(
             uint8_t channel,
-            ChannelRegister reg,
-            uint8_t data) const;
+            ChannelRegister reg) const;
 
-        bool writeOperatorRegister(
+        bool commitOperatorData(
             uint8_t op,
-            OperatorRegister reg,
-            uint8_t data) const;
+            OperatorRegister reg) const;
 
         uint8_t readStatus() const;
 
@@ -189,17 +241,13 @@ class Hardware {
         // Each bit represents whether a channel has been allocated or not
         // OPL3 provides 18 channels, but some additional ones are allocated
         // here to cater for percussion
-        unsigned m_allocatedChannelBitmap : 23;
-        
+        //unsigned m_allocatedChannelBitmap : 23;
+        uint32_t m_allocatedChannelBitmap;
+
+        // These are the "physical" channels and operators that exist in the
+        // OPL3 device
         ChannelParameters m_channelParameters[18];
         OperatorParameters m_operatorParameters[36];
-
-        unsigned m_channel0_4op     : 1;
-        unsigned m_channel1_4op     : 1;
-        unsigned m_channel2_4op     : 1;
-        unsigned m_channel9_4op     : 1;
-        unsigned m_channel10_4op    : 1;
-        unsigned m_channel11_4op    : 1;
 
         unsigned m_percussionMode   : 1;
         unsigned m_kickKeyOn        : 1;
