@@ -280,7 +280,7 @@ bool Hardware::freeChannel(
         return false;
     }
 
-    m_allocatedChannelBitmap &= ~1L << channel;
+    m_allocatedChannelBitmap &= ~(1L << channel);
 
     return true;
 }

@@ -299,6 +299,7 @@ void serviceMidiInput()
                 }
 
                 opl3Channel = g_playingNotes[noteSlot].opl3Channel;
+                Serial.println(opl3Channel);
                 if (opl3Channel == OPL3::InvalidChannel) {
 #ifdef WITH_SERIAL
                     Serial.println("Invalid OPL3 channel");
