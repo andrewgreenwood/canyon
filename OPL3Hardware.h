@@ -78,6 +78,34 @@ uint8_t getFrequencyBlock(
 uint32_t getNoteFrequency(
     uint8_t note);
 
+typedef struct ChannelParameters {
+    unsigned frequencyNumber : 10;
+
+    unsigned block           : 3;
+    unsigned keyOn           : 1;
+
+    unsigned output          : 2;
+    unsigned feedbackModulationFactor   : 3;
+    unsigned synthType       : 1;
+} ChannelParameters;
+
+typedef struct OperatorParameters {
+    unsigned sustain         : 1;
+    unsigned ksr             : 1;
+    unsigned frequencyMultiplicationFactor  : 4;
+
+    unsigned keyScalingLevel : 2;
+    unsigned attenuation     : 6;
+
+    unsigned attackRate      : 4;
+    unsigned decayRate       : 4;
+
+    unsigned sustainLevel    : 4;
+    unsigned releaseRate     : 4;
+
+    unsigned waveform        : 3;
+} OperatorParameters;
+
 class Hardware {
     public:
         Hardware(
@@ -93,6 +121,15 @@ class Hardware {
 
         bool freeChannel(
             uint8_t channel);
+
+        bool setAttackRate(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t rate);
+
+        uint8_t getAttackRate(
+            uint8_t channel,
+            uint8_t channelOperator);
 
         bool setChannelRegister(
             uint8_t channel,
@@ -153,6 +190,9 @@ class Hardware {
         // OPL3 provides 18 channels, but some additional ones are allocated
         // here to cater for percussion
         unsigned m_allocatedChannelBitmap : 23;
+        
+        ChannelParameters m_channelParameters[18];
+        OperatorParameters m_operatorParameters[36];
 
         unsigned m_channel0_4op     : 1;
         unsigned m_channel1_4op     : 1;

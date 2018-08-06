@@ -1,5 +1,7 @@
 #ifdef ARDUINO
 #include <arduino.h>
+#else
+#include <cstdio>
 #endif
 
 #include "OPL3Hardware.h"
@@ -78,8 +80,21 @@ Hardware::Hardware(
     ISABus &isaBus,
     uint16_t ioBaseAddress)
 : m_isaBus(isaBus),
-  m_ioBaseAddress(ioBaseAddress)
+  m_ioBaseAddress(ioBaseAddress),
+  m_allocatedChannelBitmap(0),
+  m_channel0_4op(false), m_channel1_4op(false), m_channel2_4op(false),
+  m_channel9_4op(false), m_channel10_4op(false), m_channel11_4op(false),
+  m_percussionMode(false), m_kickKeyOn(false), m_snareKeyOn(false),
+  m_tomTomKeyOn(false), m_cymbalKeyOn(false), m_hiHatKeyOn(false)
 {
+    uint8_t i;
+
+    // TODO - init parameters
+    //memset(m_operatorParameters, 0, sizeof(m_operatorParameters));
+
+    //for (i = 0; i < 36; ++ i) {
+        //m_operatorParameters
+    //}
 }
 
 bool Hardware::detect() const
@@ -197,6 +212,36 @@ bool Hardware::freeChannel(
     m_allocatedChannelBitmap &= ~(1L << channel);
 
     return true;
+}
+
+bool Hardware::setAttackRate(
+    uint8_t channel,
+    uint8_t channelOperator,
+    uint8_t rate)
+{
+    uint8_t op;
+    uint8_t data;
+
+    if ((!isAllocatedChannel(channel)) || (rate > 15)) {
+        return false;
+    }
+
+    op = getChannelOperator(channel, channelOperator);
+    if (op == InvalidOperator) {
+        return false;
+    }
+
+    m_operatorParameters[op].attackRate = rate;
+
+    data = (rate << 4) | (m_operatorParameters[op].decayRate & 0x0f);
+
+    return writeOperatorRegister(op, OperatorRegisterC, data);
+}
+
+uint8_t Hardware::getAttackRate(
+    uint8_t channel,
+    uint8_t channelOperator)
+{
 }
 
 bool Hardware::setChannelRegister(
@@ -612,3 +657,18 @@ void Hardware::writeData(
 }
 
 }
+
+
+#include "ISABus.h"
+int main()
+{
+    ISABus bus;
+    OPL3::Hardware device(bus, 0x388);
+
+    uint8_t ch;
+    ch = device.allocateChannel(OPL3::Melody2OpChannelType);
+
+    printf("Channel %d\n", ch);
+    device.setAttackRate(ch, 0, 7);
+}
+
