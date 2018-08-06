@@ -11,7 +11,7 @@
 #define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-#define WITH_SERIAL
+//#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -232,7 +232,7 @@ void serviceMidiInput()
 
                 opl3.enablePercussion();
                 opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
-                Serial.println(opl3Channel);
+                //Serial.println(opl3Channel);
                 //opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
                 if (opl3Channel == OPL3::InvalidChannel) {
                     //Serial.println("Cannot allocate OPL3 channel");
@@ -243,17 +243,17 @@ void serviceMidiInput()
 
                 opl3.setAttenuation(opl3Channel, 0, 0);
 
-                opl3.setAttackRate(opl3Channel, 0, 15);
-                opl3.setDecayRate(opl3Channel, 0, 2);
-                opl3.setSustainLevel(opl3Channel, 0, 10);
+                opl3.setAttackRate(opl3Channel, 0, 12);
+                opl3.setDecayRate(opl3Channel, 0, 9);
+                opl3.setSustainLevel(opl3Channel, 0, 2);
                 opl3.setReleaseRate(opl3Channel, 0, 8);
 
-                opl3.setAttackRate(opl3Channel, 1, 15);
-                opl3.setDecayRate(opl3Channel, 1, 7);
-                opl3.setSustainLevel(opl3Channel, 1, 7);
-                opl3.setReleaseRate(opl3Channel, 1, 4);
+                opl3.setAttackRate(opl3Channel, 1, 12);
+                opl3.setDecayRate(opl3Channel, 1, 2);
+                opl3.setSustainLevel(opl3Channel, 1, 6);
+                opl3.setReleaseRate(opl3Channel, 1, 11);
 
-                opl3.setSynthType(opl3Channel, 1);
+                opl3.setSynthType(opl3Channel, 0);
 
                 /*
                 opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterA, 0x21);
@@ -299,7 +299,7 @@ void serviceMidiInput()
                 }
 
                 opl3Channel = g_playingNotes[noteSlot].opl3Channel;
-                Serial.println(opl3Channel);
+                //Serial.println(opl3Channel);
                 if (opl3Channel == OPL3::InvalidChannel) {
 #ifdef WITH_SERIAL
                     Serial.println("Invalid OPL3 channel");

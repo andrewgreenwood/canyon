@@ -930,7 +930,7 @@ bool Hardware::commitChannelData(
         case ChannelRegisterC:
             data = (m_channelParameters[channel].output << 4)
                  | (m_channelParameters[channel].feedbackModulationFactor << 1)
-                 | (m_channelParameters[channel].synthType << 1); // TODO: Check this is correct
+                 | (m_channelParameters[channel].synthType & 0x1); // TODO: Check this is correct
             break;
 
         default:
