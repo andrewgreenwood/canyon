@@ -11,7 +11,7 @@
 #define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-#define WITH_SERIAL
+//#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -45,7 +45,7 @@ MPU401 mpu401(isaBus);
 OPL3::Hardware opl3(isaBus, opl3IoBaseAddress);
 
 MIDIBuffer midiBuffer;
-MIDIControl midiControl;
+MIDIControl midiControl(opl3);
 
 #if 0
 typedef struct __attribute__((packed)) NoteData {

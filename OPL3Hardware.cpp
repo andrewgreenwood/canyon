@@ -78,7 +78,12 @@ Hardware::Hardware(
     ISABus &isaBus,
     uint16_t ioBaseAddress)
 : m_isaBus(isaBus),
-  m_ioBaseAddress(ioBaseAddress)
+  m_ioBaseAddress(ioBaseAddress),
+  m_allocatedChannelBitmap(0),
+  m_channel0_4op(false), m_channel1_4op(false), m_channel2_4op(false),
+  m_channel9_4op(false), m_channel10_4op(false), m_channel11_4op(false),
+  m_percussionMode(false), m_kickKeyOn(false), m_snareKeyOn(false),
+  m_tomTomKeyOn(false), m_cymbalKeyOn(false), m_hiHatKeyOn(false)
 {
 }
 

@@ -2,6 +2,8 @@
 #define CANYON_MIDICONTROL_H 1
 
 #include <stdint.h>
+#include "OPL3Hardware.h"
+#include "OPL3Patch.h"
 
 #define MIDI_CHANNEL_COUNT  16
 #define MIDI_POLYPHONY      18
@@ -20,7 +22,8 @@ typedef union __attribute__((packed)) NoteData {
 
 class MIDIControl {
     public:
-        MIDIControl();
+        MIDIControl(
+            OPL3::Hardware &device);
 
         bool playNote(
             uint8_t channel,
@@ -54,7 +57,11 @@ class MIDIControl {
             uint8_t channel,
             uint8_t &noteIndex) const;
 
+        OPL3::Hardware &m_device;
+
         NoteData m_notes[MIDI_POLYPHONY];
+
+        OPL3::Patch m_patches[MIDI_CHANNEL_COUNT];
 };
 
 #endif
