@@ -147,6 +147,13 @@ bool OPL3SA::init(
     // Shared DMA - FIXME: This assumes DMA is shared (we don't even use it)
     writeControl(OPL3SA2_DMA_CONFIG, OPL3SA2_SHARED_DMA);
 
+    // Maximum volume
+    writeControl(OPL3SA2_MASTER_LEFT, 0x00);
+    writeControl(OPL3SA2_MASTER_RIGHT, 0x00);
+
+    // Can we turn off the mic?
+    writeControl(OPL3SA2_MIC, 0xff);
+
     // ???
     writeControl(OPL3SA2_MISC, 0x8f);
 

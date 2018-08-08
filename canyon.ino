@@ -243,13 +243,13 @@ void serviceMidiInput()
 
                 opl3.setAttenuation(opl3Channel, 0, 0);
 
-                opl3.setAttackRate(opl3Channel, 0, 12);
+                opl3.setAttackRate(opl3Channel, 0, 6);
                 opl3.setDecayRate(opl3Channel, 0, 9);
-                opl3.setSustainLevel(opl3Channel, 0, 2);
+                opl3.setSustainLevel(opl3Channel, 0, 4);
                 opl3.setReleaseRate(opl3Channel, 0, 8);
 
-                opl3.setAttackRate(opl3Channel, 1, 12);
-                opl3.setDecayRate(opl3Channel, 1, 2);
+                opl3.setAttackRate(opl3Channel, 1, 6);
+                opl3.setDecayRate(opl3Channel, 1, 5);
                 opl3.setSustainLevel(opl3Channel, 1, 6);
                 opl3.setReleaseRate(opl3Channel, 1, 11);
 
