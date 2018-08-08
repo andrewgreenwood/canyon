@@ -152,7 +152,7 @@ bool OPL3SA::init(
     writeControl(OPL3SA2_MASTER_RIGHT, 0x00);
 
     // Can we turn off the mic?
-    writeControl(OPL3SA2_MIC, 0xff);
+    writeControl(OPL3SA2_MIC, 0x9f);
 
     // ???
     writeControl(OPL3SA2_MISC, 0x8f);
