@@ -1,0 +1,25 @@
+Arduino/ATmega328 Pin Map
+
+These pins are used by the "Canyon" ISA sound card interface project.
+
+Arduino  Port/Pin  IC Pin  Purpose
+0 / RX   D0        2       UART RX (optional)
+1 / TX   D1        3       UART TX (optional)
+2        D2        4       Interrupt (MPU-401 UART)
+3        D3        5       SPI Slave Select (ISA Bus)
+4        D4        6       -
+5        D5        11      ISA Read (~IOR)
+6        D6        12      Load/Shift Mode (universal shift register)
+7        D7        13      Latch (595 RCLK)
+8        B0        14      ISA Reset (~RESET)
+9        B1        15      ISA Write (~IOW)
+10       B2        16      - (Reserved for Slave Select)
+11       B3        17      SPI MOSI (Out to ISA Bus)
+12       B4        18      SPI MISO (In from ISA Bus)
+13       B5        19      SPI Clock
+A0       C0        23      -
+A1       C1        24      -
+A2       C2        25      -
+A3       C3        26      -
+A4       C4        27      -
+A5       C5        28      -

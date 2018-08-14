@@ -11,7 +11,7 @@
 #define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-//#define WITH_SERIAL
+#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -27,6 +27,7 @@ const uint8_t  mpu401IRQ            = 5;
 const uint16_t opl3IoBaseAddress    = 0x388;
 
 const uint8_t mpu401IntPin = 2;
+const uint8_t isaSlaveSelectPin = 3;
 const uint8_t isaReadPin = 5;
 const uint8_t isaLoadPin = 6;
 const uint8_t isaLatchPin = 7;
@@ -36,8 +37,8 @@ const uint8_t isaOutputPin = 11;
 const uint8_t isaInputPin = 12;
 const uint8_t isaClockPin = 13;
 
-ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
-              isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
+ISABus isaBus(isaOutputPin, isaInputPin, isaSlaveSelectPin, isaClockPin,
+              isaLatchPin, isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
@@ -70,7 +71,6 @@ void receiveMpu401Data()
 
     isrBegin();
 
-    digitalWrite(3, HIGH);
     while (mpu401.canRead()) {
         data = mpu401.readData();
 
@@ -105,21 +105,19 @@ void receiveMpu401Data()
         }
     }
 
-    digitalWrite(3, LOW);
-
     isrEnd();
 }
 
 void setup()
 {
-    pinMode(3, OUTPUT); // Debugging LED
-
 #ifdef WITH_SERIAL
     Serial.begin(9600);
     Serial.println("Canyon\n------");
-    Serial.print("Initialising OPL3SA... ");
 #endif
 
+    isaBus.reset();
+
+    Serial.print("Initialising OPL3SA... ");
     if (!opl3sa.init(mpu401IoBaseAddress, mpu401IRQ, opl3IoBaseAddress)) {
 #ifdef WITH_SERIAL
         Serial.println("Failed");
