@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3SA control
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #include <arduino.h>
 #include "ISAPlugAndPlay.h"
 #include "OPL3SA.h"

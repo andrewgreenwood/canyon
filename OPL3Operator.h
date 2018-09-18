@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3 operator class
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef CANYON_OPL3OPERATOR_H
 #define CANYON_OPL3OPERATOR_H 1
 

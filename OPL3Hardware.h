@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3 control
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef CANYON_OPL3HARDWARE_H
 #define CANYON_OPL3HARDWARE_H 1
 

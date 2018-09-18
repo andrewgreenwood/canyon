@@ -2,6 +2,7 @@
     Project:    Canyon
     Purpose:    OPL3 ISA Sound Card controller
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     Designed for Yamaha Audician sound card

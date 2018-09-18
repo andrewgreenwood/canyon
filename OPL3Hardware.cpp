@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3 control
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifdef ARDUINO
 #include <arduino.h>
 #else

@@ -2,6 +2,7 @@
     Project:    Canyon
     Purpose:    ISA Bus Interface
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     TODO:

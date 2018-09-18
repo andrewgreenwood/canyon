@@ -2,6 +2,7 @@
     Project:    Canyon
     Purpose:    Simulated ISA Bus Interface (for prototyping embedded code)
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     At the moment, this just displays whatever I/O addresses are being accessed.

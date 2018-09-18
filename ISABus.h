@@ -2,6 +2,7 @@
     Project:    Canyon
     Purpose:    ISA Bus Interface
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     Use this with 2x shift registers (e.g. SN74HC595) and 1x universal shift

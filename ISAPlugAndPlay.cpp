@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    ISA Plug and Play
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #include <arduino.h>
 #include "ISAPlugAndPlay.h"
 

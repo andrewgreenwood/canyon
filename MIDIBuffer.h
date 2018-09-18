@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    MIDI message buffering
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef CANYON_MIDIBUFFER_H
 #define CANYON_MIDIBUFFER_H 1
 

@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    MIDI message handling
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #include "MIDI.h"
 
 uint8_t getExpectedMidiMessageLength(
