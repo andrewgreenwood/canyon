@@ -34,9 +34,13 @@ const uint8_t isaLoadPin = 6;
 const uint8_t isaLatchPin = 7;
 const uint8_t isaResetPin = 8;
 const uint8_t isaWritePin = 9;
+const uint8_t diagnosticLedPin = 10;
 const uint8_t isaOutputPin = 11;
 const uint8_t isaInputPin = 12;
 const uint8_t isaClockPin = 13;
+
+int diagnosticLedBrightness = 0;
+int diagnosticLedFrame = 0;
 
 ISABus isaBus(isaOutputPin, isaInputPin, isaSlaveSelectPin, isaClockPin,
               isaLatchPin, isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
@@ -110,8 +114,34 @@ void receiveMpu401Data()
     isrEnd();
 }
 
+/*
+    If something goes wrong during startup, the diagnostic LED will flash
+    a particular number of times to indicate which part of the program the
+    failure occurred at.
+*/
+
+void fail(int count)
+{
+    digitalWrite(diagnosticLedPin, LOW);
+    delay(1000);
+
+    for (;;) {
+        for (int i = 0; i < count; ++ i) {
+            digitalWrite(diagnosticLedPin, HIGH);
+            delay(250);
+            digitalWrite(diagnosticLedPin, LOW);
+            delay(250);
+        }
+
+        delay(1750);
+    }
+}
+
 void setup()
 {
+    pinMode(diagnosticLedPin, OUTPUT);
+    digitalWrite(diagnosticLedPin, HIGH);
+
 #ifdef WITH_SERIAL
     Serial.begin(9600);
     Serial.println("Canyon\n------");
@@ -124,7 +154,7 @@ void setup()
 #ifdef WITH_SERIAL
         Serial.println("Failed");
 #endif
-        for (;;) {}
+        fail(1);
     }
 #ifdef WITH_SERIAL
     Serial.println("Done");
@@ -134,7 +164,7 @@ void setup()
 #ifdef WITH_SERIAL
         Serial.println("Failed to detect");
 #endif
-        for (;;) {}
+        fail(2);
     }
     opl3.init();
 #ifdef WITH_SERIAL
@@ -146,7 +176,7 @@ void setup()
 #ifdef WITH_SERIAL
         Serial.println("Failed");
 #endif
-        for (;;) {}
+        fail(3);
     }
 #ifdef WITH_SERIAL
     Serial.println("Done");
@@ -180,6 +210,8 @@ void setup()
 #ifdef WITH_SERIAL
     Serial.println("\nReady!\n");
 #endif
+
+    digitalWrite(diagnosticLedPin, LOW);
 }
 
 void printMidiMessage(
@@ -214,6 +246,8 @@ void serviceMidiInput()
     #endif
 
     while (midiBuffer.hasContent()) {
+        diagnosticLedBrightness = 0xff;
+
         if (midiBuffer.get(message)) {
             channel = message.status & 0x0f;
 
@@ -340,5 +374,12 @@ void serviceMidiInput()
 
 void loop()
 {
+    if (diagnosticLedBrightness > 0) {
+        if (++ diagnosticLedFrame > 500) {
+            analogWrite(diagnosticLedPin, -- diagnosticLedBrightness);
+            diagnosticLedFrame = 0;
+        }
+    }
+
     serviceMidiInput();
 }
