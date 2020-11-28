@@ -93,7 +93,8 @@ void receiveMpu401Data()
 
         if (expectedLength == 0) {
             #ifdef WITH_SERIAL
-            Serial.println("Not supported - ignoring");
+            Serial.println("Not supported - ignoring status:");
+            Serial.println(message.status);
             #endif
             // Not a supported message - ignore it and wait for the next
             // status byte
