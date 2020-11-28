@@ -2,6 +2,7 @@
     Project:    Canyon
     Purpose:    ISA Bus Interface
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     Use this with 2x shift registers (e.g. SN74HC595) and 1x universal shift
@@ -25,6 +26,16 @@
 
     See the comments for the ISABus constructor arguments regarding the pins
     that the Arduino is required to connect to.
+
+    Originally this was written to use "bit-banging", it has since been updated
+    to use SPI. The relevant pins to use are:
+
+    10 / SS   - Not used (is set as an OUTPUT)
+    11 / MOSI - outputPin
+    12 / MISO - inputPin
+    13 / SCK  - clockPin
+
+    Eventually the above pins will be used implicitly by this component.
 */
 
 #ifndef ISABUS_H
@@ -32,11 +43,16 @@
 
 #include <stdint.h>
 
+#ifndef ARDUINO
+    // Not compiling for embedded use - use simulated ISA bus
+    #include "prototype/ISABus.h"
+#else
 class ISABus {
     public:
         ISABus(
             uint8_t outputPin,  // To first shift register's serial input (SER)
             uint8_t inputPin,   // From final shift register's serial output (Qh')
+            uint8_t slaveSelectPin, // SPI slave select
             uint8_t clockPin,   // Shift clock pin (SRCLK,SRCLK,CLK)
             uint8_t latchPin,   // Shift register store pin (RCLK,RCLK)
             uint8_t loadPin,    // To S1 pin of final shift register
@@ -54,14 +70,16 @@ class ISABus {
             uint16_t address) const;
 
     private:
-        uint8_t m_outputPin;
-        uint8_t m_inputPin;
-        uint8_t m_clockPin;
-        uint8_t m_latchPin;
-        uint8_t m_loadPin;
-        uint8_t m_ioWritePin;
-        uint8_t m_ioReadPin;
-        uint8_t m_resetPin;
+        unsigned m_outputPin    : 4;
+        unsigned m_inputPin     : 4;
+        unsigned m_slaveSelectPin : 4;
+        unsigned m_clockPin     : 4;
+        unsigned m_latchPin     : 4;
+        unsigned m_loadPin      : 4;
+        unsigned m_ioWritePin   : 4;
+        unsigned m_ioReadPin    : 4;
+        unsigned m_resetPin     : 4;
 };
+#endif
 
 #endif

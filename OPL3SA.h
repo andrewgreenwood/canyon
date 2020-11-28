@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3SA control
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef OPL3SA_H
 #define OPL3SA_H 1
 

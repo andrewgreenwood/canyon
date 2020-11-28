@@ -1,3 +1,26 @@
+/*
+    Project:    Canyon
+    Purpose:    ISA Plug and Play
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+
+    The "Plug and Play ISA Specification" describes a method of allowing ISA
+    expansion cards to have their hardware resources (I/O addresses, IRQs and
+    DMA channels) configured via software.
+
+    The implementation here is based upon the specification documented at the
+    following web address:
+
+    www.osdever.net/documents/PNP-ISA-v1.0a.pdf
+
+    Ports 0x279 and 0xa79 are used by all ISA PnP devices. A key corresponding
+    to the device to be configured is sent (via sendKey), which isolates that
+    card so that we can talk only to it. A separate address is configured to
+    receive data from the device (via setReadAddress). After this, devices can
+    be enabled/disabled and resources can be assigned.
+*/
+
 #include <stdint.h>
 #include "ISABus.h"
 

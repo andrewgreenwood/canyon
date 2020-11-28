@@ -1,7 +1,16 @@
+/*
+    Project:    Canyon
+    Purpose:    OPL3SA control
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #include <arduino.h>
 #include "ISAPlugAndPlay.h"
 #include "OPL3SA.h"
 
+// TODO: Move these into the main program
 #define SOUNDBLASTER_IO_ADDRESS  0x220
 #define MPU401_IO_ADDRESS        0x330
 #define CONTROL_IO_ADDRESS       0x370
@@ -145,6 +154,13 @@ bool OPL3SA::init(
 
     // Shared DMA - FIXME: This assumes DMA is shared (we don't even use it)
     writeControl(OPL3SA2_DMA_CONFIG, OPL3SA2_SHARED_DMA);
+
+    // Maximum volume
+    writeControl(OPL3SA2_MASTER_LEFT, 0x00);
+    writeControl(OPL3SA2_MASTER_RIGHT, 0x00);
+
+    // Can we turn off the mic?
+    writeControl(OPL3SA2_MIC, 0x9f);
 
     // ???
     writeControl(OPL3SA2_MISC, 0x8f);

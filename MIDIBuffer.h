@@ -1,10 +1,18 @@
+/*
+    Project:    Canyon
+    Purpose:    MIDI message buffering
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef CANYON_MIDIBUFFER_H
 #define CANYON_MIDIBUFFER_H 1
 
 #include <stdint.h>
 #include "MIDI.h"
 
-#define MIDI_BUFFER_SIZE    256
+#define MIDI_BUFFER_SIZE    128
 
 class MIDIBuffer {
     public:

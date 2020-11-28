@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    MPU-401 UART I/O
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2018
+*/
+
 #ifndef MPU401_H
 #define MPU401_H
 

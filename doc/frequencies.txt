@@ -1,0 +1,69 @@
+Frequency ranges by block
+-------------------------
+
+F-Number = Music Frequency * 2^(20-Block) / 49716 Hz
+
+3 bits  Block number    (0 ~ 7)
+10 bits Freq Number     (0 ~ 1023)
+
+Block   Minimum     Maximum     Granularity Max Note
+0       0.03        48.48       0.04732     F#1
+1       0.05        96.96       0.09464     F#2
+2       0.10        193.92      0.18928     F#3
+3       0.19        387.84      0.37856     F#4
+4       0.38        775.68      0.75713     F#5
+5       0.76        1551.36     1.51426     F#6
+6       1.52        3102.72     3.02852     F#7
+7       3.04        6205.44     6.05702     F#8
+
+Minimum = Fnum 0
+Maximum = Fnum 1023
+
+With each block, the minimum and maximum frequencies are doubled, as well as
+the granularity.
+
+Generally, the lowest block possible should be used as this provides the best
+accuracy.
+
+
+Simplified Calculation
+----------------------
+
+Could use a table of block multipliers, i.e.
+
+2 ^ (20 - block)
+
+Block 0:    1,048,576
+Block 1:    524,288
+Block 2:    262,144
+Block 3:    131,072
+Block 4:    65,536
+Block 5:    32,768
+Block 6:    16,384
+Block 7:    8,192
+
+
+Avoiding Floating-Point
+-----------------------
+
+Frequency could be specified in 1/100Hz values (e.g. 620544 instead of 6205.44):
+
+F-Number = Music Frequency * Multiplier[block] / 4971600
+
+This can result in huge numbers.
+
+Halve the block multiplier?
+
+6205.44 = 1022
+((620544 * 4,096) / (49716 / 2)) / 100 = 1022.5
+
+29.14 = 615
+((2914 * 524288) / (49716 / 2)) / 100 = 614.6
+
+24858
+
+or
+(2914 * 524288) / 2485800 = 614.6
+ ^      ^         ^-- this is 49716 * 200
+ |      |-- half of the multiplier
+ |-- 1/100th of the frequency

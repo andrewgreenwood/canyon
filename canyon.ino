@@ -2,22 +2,33 @@
     Project:    Canyon
     Purpose:    OPL3 ISA Sound Card controller
     Author:     Andrew Greenwood
+    License:    See license.txt
     Date:       July 2018
 
     Designed for Yamaha Audician sound card
 */
 
-// This is very broken at the moment
-//#define USE_MPU401_INTERRUPTS
+// Undefine to use polling
+#define USE_MPU401_INTERRUPTS
+
+// Define this to have serial output
+#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
 #include "OPL3SA.h"
 #include "MPU401.h"
+#include "OPL3Hardware.h"
 #include "MIDIBuffer.h"
 #include "MIDI.h"
+#include "ISRState.h"
+
+const uint16_t mpu401IoBaseAddress  = 0x330;
+const uint8_t  mpu401IRQ            = 5;
+const uint16_t opl3IoBaseAddress    = 0x388;
 
 const uint8_t mpu401IntPin = 2;
+const uint8_t isaSlaveSelectPin = 3;
 const uint8_t isaReadPin = 5;
 const uint8_t isaLoadPin = 6;
 const uint8_t isaLatchPin = 7;
@@ -27,20 +38,27 @@ const uint8_t isaOutputPin = 11;
 const uint8_t isaInputPin = 12;
 const uint8_t isaClockPin = 13;
 
-ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
-              isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
+ISABus isaBus(isaOutputPin, isaInputPin, isaSlaveSelectPin, isaClockPin,
+              isaLatchPin, isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
+OPL3::Hardware opl3(isaBus, opl3IoBaseAddress);
 
 MIDIBuffer midiBuffer;
+
+typedef struct __attribute__((packed)) NoteData {
+    unsigned midiChannel    : 4;
+    unsigned opl3Channel    : 5;
+    unsigned midiNote       : 7;
+} NoteData;
+
+NoteData g_playingNotes[OPL3::NumberOfChannels];
 
 /*
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
     routine just buffers the incoming data.
 */
-
-volatile bool handlingMpu401Input = false;
 
 void receiveMpu401Data()
 {
@@ -52,19 +70,9 @@ void receiveMpu401Data()
         0, {0, 0}
     };
 
-    /*
-    noInterrupts();
-    if (handlingMpu401Input) {
-        // Don't enter this routine asynchronously if it's already running!
-        interrupts();
-        return;
-    }
-    handlingMpu401Input = true;
-    interrupts();
-    */
+    isrBegin();
 
     while (mpu401.canRead()) {
-
         data = mpu401.readData();
 
         if (data & 0x80) {
@@ -73,7 +81,6 @@ void receiveMpu401Data()
             length = 1;
         } else if (message.status == 0) {
             // Unknown status - skip
-            digitalWrite(3, HIGH);
             continue;
         } else {
             // Data byte
@@ -85,6 +92,10 @@ void receiveMpu401Data()
         expectedLength = getExpectedMidiMessageLength(message.status);
 
         if (expectedLength == 0) {
+            #ifdef WITH_SERIAL
+            Serial.println("Not supported - ignoring status:");
+            Serial.println(message.status);
+            #endif
             // Not a supported message - ignore it and wait for the next
             // status byte
             message.status = 0;
@@ -95,178 +106,236 @@ void receiveMpu401Data()
             length = 1;
         }
     }
-/*
-    noInterrupts();
-    handlingMpu401Input = false;
-    interrupts();
-    */
+
+    isrEnd();
 }
 
 void setup()
 {
-    pinMode(3, OUTPUT); // Debugging LED
-
+#ifdef WITH_SERIAL
     Serial.begin(9600);
     Serial.println("Canyon\n------");
+#endif
+
+    isaBus.reset();
 
     Serial.print("Initialising OPL3SA... ");
-    if (!opl3sa.init(0x330, 5, 0x388)) {
+    if (!opl3sa.init(mpu401IoBaseAddress, mpu401IRQ, opl3IoBaseAddress)) {
+#ifdef WITH_SERIAL
         Serial.println("Failed");
+#endif
         for (;;) {}
     }
+#ifdef WITH_SERIAL
     Serial.println("Done");
-
     Serial.print("Initialising OPL3... ");
-    for (int i = 0; i <= 0xff; ++ i) {
-        // Primary register set
-        isaBus.write(0x388, i);
-        isaBus.write(0x389, 0);
-
-        // Secondary register set
-        isaBus.write(0x38a, i);
-        isaBus.write(0x38b, 0);
-    }
-    Serial.println("Done");
-
-    Serial.print("Initialising MPU-401... ");
-    mpu401.init(0x330);
-    if (!mpu401.reset()) {
-        Serial.println("Failed");
+#endif
+    if (!opl3.detect()) {
+#ifdef WITH_SERIAL
+        Serial.println("Failed to detect");
+#endif
         for (;;) {}
     }
+    opl3.init();
+#ifdef WITH_SERIAL
     Serial.println("Done");
+    Serial.print("Initialising MPU-401... ");
+#endif
+    mpu401.init(mpu401IoBaseAddress);
+    if (!mpu401.reset()) {
+#ifdef WITH_SERIAL
+        Serial.println("Failed");
+#endif
+        for (;;) {}
+    }
+#ifdef WITH_SERIAL
+    Serial.println("Done");
+#endif
 
     // Set up interrupt handling for the MPU-401 now (after init)
-    #ifdef USE_MPU401_INTERRUPTS
+#ifdef USE_MPU401_INTERRUPTS
+#ifdef WITH_SERIAL
     Serial.println("Interrupt mode ENABLED");
+#endif
     pinMode(mpu401IntPin, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(mpu401IntPin), receiveMpu401Data, RISING);
-    #else
+#else
+#ifdef WITH_SERIAL
     Serial.println("Interrupt mode NOT ENABLED");
-    #endif
+#endif
+#endif
 
-    // Set up some initial sound to play with
-    opl3Write(true, 0x20, 0x21);
-    opl3Write(true, 0x40, 0x18);
-    opl3Write(true, 0x60, 0xf0);   // Attack/Decay
-    opl3Write(true, 0x80, 0x77);   // Sustain/Release
-    opl3Write(true, 0xa0, 0x98);
-    opl3Write(true, 0x23, 0x21);
-    opl3Write(true, 0x43, 0x00);
-    opl3Write(true, 0x63, 0xf4);   // Attack/Decay
-    opl3Write(true, 0x83, 0x7f);   // Sustain/Release
-
-    Serial.println("\nReady!\n");
-}
-
-
-// Frequencies of notes within each block
-const uint16_t freqBlockTable[12] = {
-    0x157, 0x16b, 0x181, 0x198, 0x1b0, 0x1ca, 0x1e5, 0x202, 0x220, 0x241, 0x263, 0x287
-};
-
-void calcFrequencyAndBlock(
-    uint8_t note,
-    uint16_t *frequency,
-    uint8_t *block)
-{
-    // Maximum note
-    if (note > 95) {
-        return;
+    // panning - TODO
+    for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+        //opl3.setChannelRegister(i, OPL3::ChannelRegisterC, 0x30);
     }
 
-    *block = note / 12;
-    *frequency = freqBlockTable[note % 12];
+    // Note allocation
+    for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+        g_playingNotes[i].midiChannel = 0;
+        g_playingNotes[i].opl3Channel = 31; // Not a valid channel
+        g_playingNotes[i].midiNote = 0;
+    }
+
+#ifdef WITH_SERIAL
+    Serial.println("\nReady!\n");
+#endif
 }
 
-void opl3Write(
-    bool primary,
-    uint8_t reg,
-    uint8_t data)
+void printMidiMessage(
+    struct MIDIMessage &message)
 {
-    uint16_t basePort = primary ? 0x388 : 0x38a;
-
-    isaBus.write(basePort, reg);
-    isaBus.write(basePort + 1, data);
+#ifdef WITH_SERIAL
+    Serial.print(message.status, HEX);
+    Serial.print(" ");
+    Serial.print(message.data[0], HEX);
+    Serial.print(" ");
+    Serial.print(message.data[1], HEX);
+    Serial.print("\n");
+#endif
 }
-
-
-uint16_t noData = 0;
 
 void serviceMidiInput()
 {
-    bool hasData = false;
     struct MIDIMessage message;
+    uint32_t freq;
     uint16_t fnum;
     uint8_t block;
     uint8_t byte_b0;
+    uint8_t channel;
+
+    int noteSlot = -1;
+    uint8_t opl3Channel = OPL3::InvalidChannel;
 
     #ifndef USE_MPU401_INTERRUPTS
-    digitalWrite(3, HIGH);
     if (mpu401.canRead()) {
-        digitalWrite(3, LOW);
-        noData = 0;
         receiveMpu401Data();
     }
     #endif
 
-    /*
-    if (noData > 50000) {
-        Serial.println("HANG?");
-        Serial.print("Status = ");
-        Serial.println(isaBus.read(0x331), HEX);
-        Serial.print("Data = ");
-        Serial.println(isaBus.read(0x330), HEX);
-        Serial.print("Last message = ");
-        Serial.print(message.status, HEX);
-        Serial.print(",");
-        Serial.print(message.data[0], HEX);
-        Serial.print(",");
-        Serial.println(message.data[1], HEX);
-        noData = 0;
-    }
-
-    if (!midiBuffer.hasContent()) {
-        ++ noData;
-    }
-    */
-
     while (midiBuffer.hasContent()) {
-        noData = 0;
-        hasData = true;
-        /*
-        Serial.print(midiBuffer.usage());
-        Serial.print(" -- ");
-        */
         if (midiBuffer.get(message)) {
-            /*
-            Serial.print(message.status, HEX);
-            Serial.print(" ");
-            Serial.print(message.data[0], HEX);
-            Serial.print(" ");
-            Serial.print(message.data[1], HEX);
-            Serial.print("\n");
-            */
+            channel = message.status & 0x0f;
 
-            if (message.status == 0x90) {
-                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
+            if ((message.status & 0xf0) == 0x90) {
+                noteSlot = -1;
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+                    if (g_playingNotes[i].opl3Channel == 31) {
+                        noteSlot = i;
+                    }
+                }
+
+                if (noteSlot == -1) {
+                    //Serial.println("No free note slots!");
+                    continue;
+                }
+
+                opl3.enablePercussion();
+                opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
+                //Serial.println(opl3Channel);
+                //opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
+                if (opl3Channel == OPL3::InvalidChannel) {
+                    //Serial.println("Cannot allocate OPL3 channel");
+                    continue;
+                }
+
+                opl3.setOutput(opl3Channel, 3);
+
+                opl3.setAttenuation(opl3Channel, 0, 16);
+
+                opl3.setAttackRate(opl3Channel, 0, 15);
+                opl3.setDecayRate(opl3Channel, 0, 0);
+                opl3.setSustainLevel(opl3Channel, 0, 7);
+                opl3.setReleaseRate(opl3Channel, 0, 7);
+
+                opl3.setAttenuation(opl3Channel, 1, 0);
+
+                opl3.setAttackRate(opl3Channel, 1, 15);
+                opl3.setDecayRate(opl3Channel, 1, 0);
+                opl3.setSustainLevel(opl3Channel, 1, 7);
+                opl3.setReleaseRate(opl3Channel, 1, 7);
+
+                opl3.setSynthType(opl3Channel, 0);
+
+                /*
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterA, 0x21);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterB, 0x10);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterC, 0xf0);
+                opl3.setOperatorRegister(opl3Channel, 0, OPL3::OperatorRegisterD, 0x74);
+
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterA, 0x21);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterB, 0x10);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterC, 0xf0);
+                opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterD, 0x74);
+                */
+
+                g_playingNotes[noteSlot].midiChannel = channel;
+                g_playingNotes[noteSlot].opl3Channel = opl3Channel;
+                g_playingNotes[noteSlot].midiNote = message.data[0];
+
+                freq = OPL3::getNoteFrequency(message.data[0]);
+                block = OPL3::getFrequencyBlock(freq);
+                fnum = OPL3::getFrequencyFnum(freq, block);
+
                 byte_b0 = 0x20 | (fnum >> 8) | (block << 2);
 
-                opl3Write(0, 0xa0, fnum);
-                opl3Write(0, 0xb0, byte_b0);
-            } else if (message.status == 0x80) {
-                calcFrequencyAndBlock(message.data[0] - 12, &fnum, &block);
+                opl3.setFrequency(opl3Channel, freq);
+                opl3.keyOn(opl3Channel);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterA, fnum);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+            } else if ((message.status & 0xf0) == 0x80) {
+                noteSlot = -1;
+
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+                    if ((g_playingNotes[i].midiNote == message.data[0])
+                        && (g_playingNotes[i].midiChannel == channel)
+                        && (g_playingNotes[i].opl3Channel != 31)) {
+                        noteSlot = i;
+                        break;
+                    }
+                }
+
+                if (noteSlot == -1) {
+                    //Serial.println("Note slot not allocated");
+                    continue;
+                }
+
+                opl3Channel = g_playingNotes[noteSlot].opl3Channel;
+                //Serial.println(opl3Channel);
+                if (opl3Channel == OPL3::InvalidChannel) {
+#ifdef WITH_SERIAL
+                    Serial.println("Invalid OPL3 channel");
+                    continue;
+#endif
+                }
+
+                freq = OPL3::getNoteFrequency(message.data[0]);
+                block = OPL3::getFrequencyBlock(freq);
+                fnum = OPL3::getFrequencyFnum(freq, block);
+
                 byte_b0 = (fnum >> 8) | (block << 2);
-                opl3Write(0, 0xb0, byte_b0);
+                //opl3.setChannelRegister(opl3Channel, OPL3::ChannelRegisterB, byte_b0);
+                opl3.keyOff(opl3Channel);
+
+                opl3.freeChannel(opl3Channel);
+
+                // TODO: Shuffle along
+                g_playingNotes[noteSlot].midiChannel = 0;
+                g_playingNotes[noteSlot].opl3Channel = 31;
+                g_playingNotes[noteSlot].midiNote = 0;
+            } else if ((message.status & 0xf0) == 0xb0) {
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+                    if ((g_playingNotes[i].midiChannel == channel)
+                        && (g_playingNotes[i].opl3Channel != 31)) {
+                        if (message.data[0] == 37) {
+                            //opl3.setOperatorRegister(opl3Channel, 1, OPL3::OperatorRegisterE,
+                            //                         message.data[1] / 16);
+                        }
+                    }
+                }
             }
         }
-        //Serial.print(getMidiMessage(), HEX);
     }
-
-    if (hasData) {
-//        Serial.println("");
-    }
-
 }
 
 void loop()
