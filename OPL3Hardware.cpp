@@ -88,9 +88,19 @@ Hardware::Hardware(
     ISABus &isaBus,
     uint16_t ioBaseAddress)
 : m_isaBus(isaBus),
-  m_ioBaseAddress(ioBaseAddress)
+  m_ioBaseAddress(ioBaseAddress),
+  m_allocatedChannelBitmap(0),
+  m_percussionMode(false),
+  m_kickKeyOn(false),
+  m_snareKeyOn(false),
+  m_tomTomKeyOn(false),
+  m_cymbalKeyOn(false),
+  m_hiHatKeyOn(false),
+  m_numberOfFree2OpChannels(0),
+  m_numberOfFree4OpChannels(0)
 {
-    uint8_t i;
+
+    //uint8_t i;
 
     // TODO - init parameters
     //memset(m_operatorParameters, 0, sizeof(m_operatorParameters));
@@ -164,11 +174,31 @@ void Hardware::init()
     m_cymbalKeyOn = false;
     m_hiHatKeyOn = false;
 
+    // Set up channel lists (2-op by default)
+    m_numberOfFree2OpChannels = 18;
+    for (i = 0; i < 18; ++ i) {
+        m_free2OpChannels[i] = i;
+    }
+
     // Disable waveform selection, reset test register
-    //writeData(true, 0x01, 0x00);
     writeGlobalRegister(GlobalRegisterA, 0x00);
 
-    // Stop all sounds
+    // Enable waveform selection
+    writeGlobalRegister(GlobalRegisterA, 0x20);
+
+    // Disable keyboard split
+    writeGlobalRegister(GlobalRegisterE, 0x40);
+
+    // Enable OPL3 mode
+    writeGlobalRegister(GlobalRegisterH, 0x01);
+
+    // Turn off 4-op channels
+    writeGlobalRegister(GlobalRegisterG, 0x00);
+
+    // Turn off percussion mode
+    writeGlobalRegister(GlobalRegisterF, 0x00);
+
+    // Init channels (as 2-op melody channels)
     for (i = 0; i < 18; ++ i) {
         m_channelParameters[i].type = Melody2OpChannelType;
         m_channelParameters[i].frequencyNumber = 0;
@@ -183,11 +213,12 @@ void Hardware::init()
         commitChannelData(i, ChannelRegisterC);
     }
 
+    // Init operators
     for (i = 0; i < 36; ++ i) {
         m_operatorParameters[i].sustain = false;
         m_operatorParameters[i].ksr = 0;
         m_operatorParameters[i].frequencyMultiplicationFactor = 0;
-        m_operatorParameters[i].keyScalingLevel = 0;
+        m_operatorParameters[i].keyScaleLevel = 0;
         m_operatorParameters[i].attenuation = 0;
         m_operatorParameters[i].attackRate = 0;
         m_operatorParameters[i].decayRate = 0;
@@ -202,24 +233,14 @@ void Hardware::init()
         commitOperatorData(i, OperatorRegisterE);
     }
 
-    // TODO: Maybe initialise the other channel and operator registers?
-
-    // Enable waveform selection
-    //writeData(true, 0x01, 0x20);
-    writeGlobalRegister(GlobalRegisterA, 0x20);
-
-    // Disable keyboard split
-    //writeData(true, 0x08, 0x40);
-    writeGlobalRegister(GlobalRegisterE, 0x40);
-
-    // Enable OPL3 mode
-    //writeData(false, 0x05, 0x01);
-    writeGlobalRegister(GlobalRegisterH, 0x01);
+//    for (i = 0; i < m_numberOfFreeChannels; ++ i) {
+//        m_channelParameters[m_freeChannels[i]].type = m_channelType;
+//    }
 }
 
 bool Hardware::enablePercussion()
 {
-    uint8_t i;
+    int i, j;
 
     if (m_percussionMode) {
         return true;
@@ -232,10 +253,26 @@ bool Hardware::enablePercussion()
         }
     }
 
+    // Only need to write the register when doing a key-on, otherwise we
+    // can't set operator values
+#if 0
     // Enable percussion mode
-    if (writeGlobalRegister(GlobalRegisterF, 0x20)) {
-        m_percussionMode = true;
+    if (!writeGlobalRegister(GlobalRegisterF, 0x20)) {
+        return false;
     }
+#endif
+
+    m_percussionMode = true;
+
+    // TODO: Use new channel add/remove
+    // Make channels 6, 7 and 8 unavailable as 2-op melody channels
+    j = 0;
+    for (i = 0; i < m_numberOfFree2OpChannels; ++ i) {
+        if ((m_free2OpChannels[i] < 6) || (m_free2OpChannels[i] > 8)) {
+            m_free2OpChannels[j ++] = m_free2OpChannels[i];
+        }
+    }
+    m_numberOfFree2OpChannels = j;
 
     return m_percussionMode;
 }
@@ -252,22 +289,177 @@ bool Hardware::disablePercussion()
         return false;
     }
 
-    if (writeGlobalRegister(GlobalRegisterF, 0x00)) {
-        m_percussionMode = false;
+#if 0
+    if (!writeGlobalRegister(GlobalRegisterF, 0x00)) {
+        return false;
+    }
+#endif
+
+    m_percussionMode = false;
+
+    // TODO: Use new channel add/remove
+    // Allow allocation of channels 6, 7 and 8 as 2-op melody channels
+    for (int i = 6; i < 9; ++ i) {
+        m_free2OpChannels[m_numberOfFree2OpChannels ++] = i;
     }
 
     return !m_percussionMode;
 }
 
+// Temporary hack to switch globally between 2-op and 4-op melody channel setups
+#if 0
+bool Hardware::setChannelType(
+    ChannelType type)
+{
+    return false;
+    #if 0
+    unsigned int maxOperator;
+
+    if (m_channelType == type)
+        return true;
+
+    m_channelType = type;
+    init();
+    return true;
+    #endif
+}
+#endif
+
 uint8_t Hardware::allocateChannel(
     ChannelType type)
 {
-    uint8_t channel;
+    uint8_t channel = InvalidChannel;
+    uint8_t fourOpCapableChannels[6] = {0, 1, 2, 9, 10, 11};
 
-    channel = findAvailableChannel(type);
+    switch (type) {
+        case NullChannelType:
+            return InvalidChannel;
+
+        case Melody2OpChannelType:
+            if (m_numberOfFree2OpChannels == 0) {
+                // Convert a 4-op channel pair if we can
+                uint8_t *candidates = fourOpCapableChannels;
+                uint8_t bits = 0;
+
+                for (int i = 0; i < 6; ++ i) {
+                    if ((getChannelType(candidates[i]) == Melody4OpChannelType) &&
+                        (getChannelType(candidates[i] + 3) == NullChannelType) &&
+                        (!isAllocatedChannel(candidates[i])) &&
+                        (!isAllocatedChannel(candidates[i] + 3))) {
+                        removeFreeChannel(m_free4OpChannels, m_numberOfFree4OpChannels, candidates[i]);
+                        // We'll be using the first channel of the pair - leave 2nd one free
+                        addFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, candidates[i] + 3);
+                        channel = candidates[i];
+                        break;
+                    }
+                }
+
+                if (channel != InvalidChannel) {
+                    for (int i = 0; i < 6; ++ i) {
+                        if (getChannelType(candidates[i]) == Melody4OpChannelType) {
+                            bits |= 1 << i;
+                        }
+                    }
+
+                    writeGlobalRegister(GlobalRegisterG, bits);
+                }
+
+                break;
+            } else {
+                // Take the first available channel
+                channel = shiftFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels);
+            }
+
+            break;
+
+        case Melody4OpChannelType:
+            if (m_numberOfFree4OpChannels == 0) {
+                // Maybe we can turn a 2-op channel pair into a 4-op channel?
+                //uint8_t candidates[6][2] = {{0, 3}, {1, 4}, {2, 5}, {9, 12}, {10, 13}, {11, 14}};
+                uint8_t *candidates = fourOpCapableChannels;
+                uint8_t bits = 0;
+
+                for (int i = 0; i < 6; ++ i) {
+                    if ((getChannelType(candidates[i]) == Melody2OpChannelType) &&
+                        (getChannelType(candidates[i] + 3) == Melody2OpChannelType) &&
+                        (!isAllocatedChannel(candidates[i])) &&
+                        (!isAllocatedChannel(candidates[i] + 3))) {
+                        removeFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, candidates[i]);
+                        removeFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, candidates[i] + 3);
+                        m_channelParameters[candidates[i]].type = Melody4OpChannelType;
+                        m_channelParameters[candidates[i] + 3].type = NullChannelType;
+                        channel = candidates[i];
+                        break;
+                    }
+                }
+
+                if (channel != InvalidChannel) {
+                    for (int i = 0; i < 6; ++ i) {
+                        if (getChannelType(candidates[i]) == Melody4OpChannelType) {
+                            bits |= 1 << i;
+                        }
+                    }
+
+                    writeGlobalRegister(GlobalRegisterG, bits);
+                }
+            } else {
+                // Take the first available channel
+                channel = shiftFreeChannel(m_free4OpChannels, m_numberOfFree4OpChannels);
+            }
+
+            break;
+            
+        case KickChannelType:
+            if ((m_percussionMode) && (!isAllocatedChannel(KickChannel))) {
+                channel = KickChannel;
+            }
+            break;
+
+        case SnareChannelType:
+            if ((m_percussionMode) && (!isAllocatedChannel(SnareChannel))) {
+                channel = SnareChannel;
+            }
+            break;
+
+        case TomTomChannelType:
+            if ((m_percussionMode) && (!isAllocatedChannel(TomTomChannel))) {
+                channel = TomTomChannel;
+            }
+            break;
+
+        case CymbalChannelType:
+            if ((m_percussionMode) && (!isAllocatedChannel(CymbalChannel))) {
+                channel = CymbalChannel;
+            }
+            break;
+
+        case HiHatChannelType:
+            if ((m_percussionMode) && (!isAllocatedChannel(HiHatChannel))) {
+                channel = HiHatChannel;
+            }
+            break;
+
+        default:
+            return InvalidChannel;
+    };
+
+#if 0
+    if (m_numberOfFreeChannels == 0)
+        return InvalidChannel;
+
+    // Take the first channel
+    channel = m_freeChannels[0];
+    -- m_numberOfFreeChannels;
+
+    // Shift the rest of the channels along by 1 slot
+    for (int i = 0; i < m_numberOfFreeChannels; ++ i) {
+        m_freeChannels[i] = m_freeChannels[i + 1];
+    }
+
+#endif
 
     if (channel != InvalidChannel) {
-       m_allocatedChannelBitmap |= 1L << channel;
+        m_allocatedChannelBitmap |= 1L << channel;
     }
 
     return channel;
@@ -276,11 +468,13 @@ uint8_t Hardware::allocateChannel(
 bool Hardware::freeChannel(
     uint8_t channel)
 {
+    ChannelType channel_type;
+
     if (!isAllocatedChannel(channel)) {
         return false;
     }
 
-    if (getChannelType(channel) == NullChannelType) {
+    if ((channel_type = getChannelType(channel)) == NullChannelType) {
         return false;
     }
 
@@ -289,6 +483,19 @@ bool Hardware::freeChannel(
     }
 
     m_allocatedChannelBitmap &= ~(1L << channel);
+
+    // Put the channel in the next slot after the last one
+    switch (channel_type) {
+        case Melody2OpChannelType:
+            addFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, channel);
+            //m_free2OpChannels[m_numberOfFree2OpChannels ++] = channel;
+            break;
+
+        case Melody4OpChannelType:
+            addFreeChannel(m_free4OpChannels, m_numberOfFree4OpChannels, channel);
+            //m_free4OpChannels[m_numberOfFree4OpChannels ++] = channel;
+            break;
+    };
 
     return true;
 }
@@ -427,37 +634,61 @@ bool Hardware::keyOff(
     }
 }
 
+#define SET_CHANNEL_VALUE(channel, realChannel, member, value, maxValue, channelRegister) \
+    if ((!isAllocatedChannel(channel)) || (value > maxValue)) \
+        return false; \
+    m_channelParameters[realChannel].member = value; \
+    return commitChannelData(realChannel, channelRegister);
+
 bool Hardware::setOutput(
     uint8_t channel,
     uint8_t output)
 {
-    uint8_t physicalChannel;
+    uint8_t realChannel;
 
-    if (!isAllocatedChannel(channel)) {
-        return false;
+    if (isPhysicalChannel(channel)) {
+        realChannel = channel;
+    } else {
+        // TODO: Check these channels
+        switch (channel) {
+            case KickChannel:
+                realChannel = 6;
+                break;
+
+            case SnareChannel:
+                realChannel = 7;
+                break;
+
+            case TomTomChannel:
+                realChannel = 8;
+                break;
+
+            case CymbalChannel:
+                realChannel = 8;
+                break;
+
+            case HiHatChannel:
+                realChannel = 7;
+                break;
+
+            default:
+                return false;
+        }
     }
 
-    if (output > 3) {
-        return false;
-    }
+    SET_CHANNEL_VALUE(channel, realChannel, output, output, 3, ChannelRegisterC);
+}
 
-    // I don't think any percussion channels support this...
+bool Hardware::setFeedbackModulationFactor(
+    uint8_t channel,
+    uint8_t factor)
+{
+    // TODO: Determine if percussion channels support this
     if (!isPhysicalChannel(channel)) {
         return false;
     }
 
-    m_channelParameters[channel].output = output;
-    return commitChannelData(channel, ChannelRegisterC);
-}
-
-uint8_t Hardware::getOutput(
-    uint8_t channel)
-{
-    if ((!isAllocatedChannel(channel)) || (!isPhysicalChannel(channel))) {
-        return false;
-    }
-
-    return m_channelParameters[channel].output;
+    SET_CHANNEL_VALUE(channel, channel, feedbackModulationFactor, factor, 7, ChannelRegisterC);
 }
 
 bool Hardware::setSynthType(
@@ -482,13 +713,13 @@ bool Hardware::setSynthType(
             break;
 
         case Melody4OpChannelType:
-            if (type > 5) {
+            if (type > 3) {
                 return false;
             }
 
             m_channelParameters[channel].synthType = type;
+            return commitChannelData(channel, ChannelRegisterC);
 
-            // TODO
             return false;
 
         default:
@@ -496,16 +727,53 @@ bool Hardware::setSynthType(
     }
 }
 
-uint8_t Hardware::getSynthType(
-    uint8_t channel) const
+#define SET_OPERATOR_VALUE(channel, channelOperator, member, value, maxValue, operatorRegister) \
+    uint8_t op; \
+    if ((!isAllocatedChannel(channel)) || (value > maxValue)) \
+        return false; \
+    if ((op = getChannelOperator(channel, channelOperator)) == InvalidOperator) \
+        return false; \
+    m_operatorParameters[op].member = value; \
+    return commitOperatorData(op, operatorRegister);
+
+bool Hardware::setTremolo(
+    uint8_t channel,
+    uint8_t channelOperator,
+    bool tremolo)
 {
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
+    SET_OPERATOR_VALUE(channel, channelOperator, tremolo, tremolo, 1, OperatorRegisterA);
+}
 
-    // TODO: Percussion
+bool Hardware::setVibrato(
+    uint8_t channel,
+    uint8_t channelOperator,
+    bool vibrato)
+{
+    SET_OPERATOR_VALUE(channel, channelOperator, vibrato, vibrato, 1, OperatorRegisterA);
+}
 
-    return m_channelParameters[channel].synthType;
+bool Hardware::setSustain(
+    uint8_t channel,
+    uint8_t channelOperator,
+    bool sustain)
+{
+    SET_OPERATOR_VALUE(channel, channelOperator, sustain, sustain, 1, OperatorRegisterA);
+}
+
+bool Hardware::setEnvelopeScaling(
+    uint8_t channel,
+    uint8_t channelOperator,
+    bool scaling)
+{
+    SET_OPERATOR_VALUE(channel, channelOperator, ksr, scaling, 1, OperatorRegisterA);
+}
+
+bool Hardware::setFrequencyMultiplicationFactor(
+    uint8_t channel,
+    uint8_t channelOperator,
+    uint8_t factor)
+{
+    SET_OPERATOR_VALUE(channel, channelOperator, frequencyMultiplicationFactor, factor, 15, OperatorRegisterA);
 }
 
 bool Hardware::setAttackRate(
@@ -513,39 +781,7 @@ bool Hardware::setAttackRate(
     uint8_t channelOperator,
     uint8_t rate)
 {
-    uint8_t op;
-    uint8_t data;
-
-    if ((!isAllocatedChannel(channel)) || (rate > 15)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    m_operatorParameters[op].attackRate = rate;
-
-    return commitOperatorData(op, OperatorRegisterC);
-}
-
-uint8_t Hardware::getAttackRate(
-    uint8_t channel,
-    uint8_t channelOperator)
-{
-    uint8_t op;
-
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    return m_operatorParameters[op].attackRate;
+    SET_OPERATOR_VALUE(channel, channelOperator, attackRate, rate, 15, OperatorRegisterC);
 }
 
 bool Hardware::setDecayRate(
@@ -553,39 +789,7 @@ bool Hardware::setDecayRate(
     uint8_t channelOperator,
     uint8_t rate)
 {
-    uint8_t op;
-    uint8_t data;
-
-    if ((!isAllocatedChannel(channel)) || (rate > 15)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    m_operatorParameters[op].decayRate = rate;
-
-    return commitOperatorData(op, OperatorRegisterC);
-}
-
-uint8_t Hardware::getDecayRate(
-    uint8_t channel,
-    uint8_t channelOperator)
-{
-    uint8_t op;
-
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    return m_operatorParameters[op].decayRate;
+    SET_OPERATOR_VALUE(channel, channelOperator, decayRate, rate, 15, OperatorRegisterC);
 }
 
 bool Hardware::setSustainLevel(
@@ -593,39 +797,7 @@ bool Hardware::setSustainLevel(
     uint8_t channelOperator,
     uint8_t level)
 {
-    uint8_t op;
-    uint8_t data;
-
-    if ((!isAllocatedChannel(channel)) || (level > 15)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    m_operatorParameters[op].sustainLevel = level;
-
-    return commitOperatorData(op, OperatorRegisterD);
-}
-
-uint8_t Hardware::getSustainLevel(
-    uint8_t channel,
-    uint8_t channelOperator)
-{
-    uint8_t op;
-
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    return m_operatorParameters[op].sustainLevel;
+    SET_OPERATOR_VALUE(channel, channelOperator, sustainLevel, level, 15, OperatorRegisterD);
 }
 
 bool Hardware::setReleaseRate(
@@ -633,39 +805,15 @@ bool Hardware::setReleaseRate(
     uint8_t channelOperator,
     uint8_t rate)
 {
-    uint8_t op;
-    uint8_t data;
-
-    if ((!isAllocatedChannel(channel)) || (rate > 15)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    m_operatorParameters[op].releaseRate = rate;
-
-    return commitOperatorData(op, OperatorRegisterD);
+    SET_OPERATOR_VALUE(channel, channelOperator, releaseRate, rate, 15, OperatorRegisterD);
 }
 
-uint8_t Hardware::getReleaseRate(
+bool Hardware::setKeyScaleLevel(
     uint8_t channel,
-    uint8_t channelOperator)
+    uint8_t channelOperator,
+    uint8_t level)
 {
-    uint8_t op;
-
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    return m_operatorParameters[op].releaseRate;
+    SET_OPERATOR_VALUE(channel, channelOperator, keyScaleLevel, level, 3, OperatorRegisterB);
 }
 
 bool Hardware::setAttenuation(
@@ -673,20 +821,15 @@ bool Hardware::setAttenuation(
     uint8_t channelOperator,
     uint8_t attenuation)
 {
-    uint8_t op;
+    SET_OPERATOR_VALUE(channel, channelOperator, attenuation, attenuation, 63, OperatorRegisterB);
+}
 
-    if (!isAllocatedChannel(channel)) {
-        return false;
-    }
-
-    op = getChannelOperator(channel, channelOperator);
-    if (op == InvalidOperator) {
-        return false;
-    }
-
-    m_operatorParameters[op].attenuation = attenuation;
-
-    return commitOperatorData(op, OperatorRegisterB);
+bool Hardware::setWaveform(
+    uint8_t channel,
+    uint8_t channelOperator,
+    uint8_t waveform)
+{
+    SET_OPERATOR_VALUE(channel, channelOperator, waveform, waveform, 7, OperatorRegisterE);
 }
 
 ChannelType Hardware::getChannelType(
@@ -745,11 +888,14 @@ bool Hardware::isAllocatedChannel(
             (1L << channel & m_allocatedChannelBitmap));
 }
 
+// This used to be called by allocateChannel but isn't currently used
 uint8_t Hardware::findAvailableChannel(
     ChannelType type) const
 {
+#if 0
     const uint8_t *channelPriorities;
     int8_t i;
+#endif
     uint8_t channel;
 
     switch (type) {
@@ -757,11 +903,15 @@ uint8_t Hardware::findAvailableChannel(
             return InvalidChannel;
 
         case Melody2OpChannelType:
+#if 0
             channelPriorities = melody2OpChannelPriority;
+#endif
             break;
 
         case Melody4OpChannelType:
+#if 0
             channelPriorities = melody4OpChannelPriority;
+#endif
             break;
 
         case KickChannelType:
@@ -795,10 +945,14 @@ uint8_t Hardware::findAvailableChannel(
             return InvalidChannel;
 
         default:
+            return InvalidChannel;
+#if 0
             channelPriorities = (uint8_t *)0;
             break;
+#endif
     };
 
+#if 0
     if (!channelPriorities) {
         return InvalidChannel;
     }
@@ -817,8 +971,49 @@ uint8_t Hardware::findAvailableChannel(
             return channel;
         }
     }
+#endif
 
     return InvalidChannel;
+}
+
+uint8_t Hardware::shiftFreeChannel(
+    uint8_t *list,
+    uint8_t &freeCount)
+{
+    uint8_t channel = list[0];
+    -- freeCount;
+
+    for (int i = 0; i < freeCount; ++ i) {
+        list[i] = list[i + 1];
+    }
+
+    return channel;
+}
+
+void Hardware::addFreeChannel(
+    uint8_t *list,
+    uint8_t &freeCount,
+    uint8_t channel)
+{
+    list[freeCount ++] = channel;
+}
+
+void Hardware::removeFreeChannel(
+    uint8_t *list,
+    uint8_t &freeCount,
+    uint8_t channel)
+{
+    int i = 0, j = 0;
+
+    // Skip everything before the channel in the list
+    for (i = 0; list[i] != channel; ++ i);
+
+    // Shift the rest along by 1 element
+    for (j = i + 1; j < freeCount; ++ j) {
+        list[i ++] = list[j];
+    }
+
+    -- freeCount;
 }
 
 unsigned int Hardware::getOperatorCount(
@@ -938,7 +1133,18 @@ bool Hardware::commitChannelData(
         case ChannelRegisterC:
             data = (m_channelParameters[channel].output << 4)
                  | (m_channelParameters[channel].feedbackModulationFactor << 1)
-                 | (m_channelParameters[channel].synthType & 0x1); // TODO: Check this is correct
+                 | (m_channelParameters[channel].synthType & 0x1);
+
+            // In 4-op mode we need to write the high bit of synth type to channel+3
+            // and also the output bits (which it seems are allowed to be different
+            // but we'll keep them the same)
+            if (getChannelType(channel) == Melody4OpChannelType) {
+                uint8_t secondChannel = channel + 3;
+                writeData(secondChannel < 9, reg | (secondChannel % 9),
+                    (m_channelParameters[channel].output << 4) |
+                    ((m_channelParameters[channel].synthType & 0x2) >> 1));
+            }
+
             break;
 
         default:
@@ -947,9 +1153,6 @@ bool Hardware::commitChannelData(
 
     // Each OPL3 I/O address pair caters for half of the 18 channels.
     writeData(channel < 9, reg | (channel % 9), data);
-
-    // TODO: If we're writing the synth type for a 4-operator melody channel,
-    // one bit of it needs to be written to the second channel of the pair.
 
     return true;
 }
@@ -967,13 +1170,15 @@ bool Hardware::commitOperatorData(
 
     switch (reg) {
         case OperatorRegisterA:
-            data = (m_operatorParameters[op].sustain << 5)
+            data = (m_operatorParameters[op].tremolo << 7)
+                 | (m_operatorParameters[op].vibrato << 6)
+                 | (m_operatorParameters[op].sustain << 5)
                  | (m_operatorParameters[op].ksr << 4)
                  | (m_operatorParameters[op].frequencyMultiplicationFactor);
             break;
 
         case OperatorRegisterB:
-            data = (m_operatorParameters[op].keyScalingLevel << 6)
+            data = (m_operatorParameters[op].keyScaleLevel << 6)
                  | (m_operatorParameters[op].attenuation);
             break;
 
@@ -1029,37 +1234,17 @@ void Hardware::writeData(
         address = m_ioBaseAddress + 2;
     }
 
+#if 0
+    Serial.print(address, HEX);
+    Serial.print(": ");
+    Serial.print(reg, HEX);
+    Serial.print(" ");
+    Serial.print(data, HEX);
+    Serial.println("");
+#endif
+
     m_isaBus.write(address, reg);
     m_isaBus.write(address + 1, data);
 }
 
 }
-
-
-#ifndef ARDUINO
-#include "ISABus.h"
-int main()
-{
-    ISABus bus;
-    OPL3::Hardware device(bus, 0x388);
-
-    uint8_t ch;
-
-    device.init();
-
-    device.enablePercussion();
-    ch = device.allocateChannel(OPL3::CymbalChannelType);
-
-    printf("Channel %d\n", ch);
-    device.setAttackRate(ch, 0, 7);
-    device.setDecayRate(ch, 0, 7);
-    device.setAttackRate(ch, 1, 4);
-    device.setSynthType(ch, 1);
-
-    device.keyOn(ch);
-
-    printf("%d\n", device.getAttackRate(ch, 0));
-
-    printf("Device size == %d\n", sizeof(device));
-}
-#endif

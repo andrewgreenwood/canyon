@@ -96,15 +96,17 @@ typedef struct ChannelParameters {
 
     unsigned output          : 2;
     unsigned feedbackModulationFactor   : 3;
-    unsigned synthType       : 3;
+    unsigned synthType       : 2;
 } ChannelParameters;
 
 typedef struct OperatorParameters {
+    unsigned tremolo         : 1;
+    unsigned vibrato         : 1;
     unsigned sustain         : 1;
     unsigned ksr             : 1;
     unsigned frequencyMultiplicationFactor  : 4;
 
-    unsigned keyScalingLevel : 2;
+    unsigned keyScaleLevel   : 2;
     unsigned attenuation     : 6;
 
     unsigned attackRate      : 4;
@@ -130,11 +132,17 @@ class Hardware {
 
         bool disablePercussion();
 
+        // Changing this will immediately free all allocated channels
+        //bool setChannelType(
+        //    ChannelType type);
+
         uint8_t allocateChannel(
             ChannelType type);
 
         bool freeChannel(
             uint8_t channel);
+
+        // Channel
 
         bool setFrequency(
             uint8_t channel,
@@ -150,56 +158,75 @@ class Hardware {
             uint8_t channel,
             uint8_t output);
 
-        uint8_t getOutput(
-            uint8_t channel);
+        bool setFeedbackModulationFactor(
+            uint8_t channel,
+            uint8_t factor);
 
         bool setSynthType(
             uint8_t channel,
             uint8_t type);
 
-        uint8_t getSynthType(
-            uint8_t channel) const;
+        // Operator
+
+        bool setTremolo(
+            uint8_t channel,
+            uint8_t channelOperator,
+            bool tremolo);
+
+        bool setVibrato(
+            uint8_t channel,
+            uint8_t channelOperator,
+            bool vibrato);
+
+        bool setSustain(
+            uint8_t channel,
+            uint8_t channelOperator,
+            bool sustain);
+
+        bool setEnvelopeScaling(
+            uint8_t channel,
+            uint8_t channelOperator,
+            bool scaling);
+
+        bool setFrequencyMultiplicationFactor(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t factor);
 
         bool setAttackRate(
             uint8_t channel,
             uint8_t channelOperator,
             uint8_t rate);
 
-        uint8_t getAttackRate(
-            uint8_t channel,
-            uint8_t channelOperator);
-
         bool setDecayRate(
             uint8_t channel,
             uint8_t channelOperator,
             uint8_t rate);
-
-        uint8_t getDecayRate(
-            uint8_t channel,
-            uint8_t channelOperator);
 
         bool setSustainLevel(
             uint8_t channel,
             uint8_t channelOperator,
             uint8_t level);
 
-        uint8_t getSustainLevel(
-            uint8_t channel,
-            uint8_t channelOperator);
-
         bool setReleaseRate(
             uint8_t channel,
             uint8_t channelOperator,
             uint8_t rate);
 
-        uint8_t getReleaseRate(
+        bool setKeyScaleLevel(
             uint8_t channel,
-            uint8_t channelOperator);
+            uint8_t channelOperator,
+            uint8_t level);
 
         bool setAttenuation(
             uint8_t channel,
             uint8_t channelOperator,
             uint8_t attenuation);
+
+        bool setWaveform(
+            uint8_t channel,
+            uint8_t channelOperator,
+            uint8_t waveform);
 
     private:
         ChannelType getChannelType(
@@ -216,6 +243,20 @@ class Hardware {
 
         uint8_t findAvailableChannel(
             ChannelType type) const;
+
+        uint8_t shiftFreeChannel(
+            uint8_t *list,
+            uint8_t &freeCount);
+
+        void addFreeChannel(
+            uint8_t *list,
+            uint8_t &freeCount,
+            uint8_t channel);
+
+        void removeFreeChannel(
+            uint8_t *list,
+            uint8_t &freeCount,
+            uint8_t channel);
 
         unsigned int getOperatorCount(
             uint8_t channel) const;
@@ -264,6 +305,13 @@ class Hardware {
         unsigned m_cymbalKeyOn      : 1;
         unsigned m_hiHatKeyOn       : 1;
 
+        uint8_t m_free2OpChannels[18];
+        uint8_t m_numberOfFree2OpChannels;
+
+        uint8_t m_free4OpChannels[6];
+        uint8_t m_numberOfFree4OpChannels;
+
+#if 0
         // Channels 6 thru 8 are considered last when allocating channels, as
         // any use of percussion will render them unavailable. Channels that
         // can function in 4-op mode are allocated in pairs when used as 2-op.
@@ -277,6 +325,7 @@ class Hardware {
             11, 10, 9, 2, 1, 0,
             InvalidChannel
         };
+#endif
 };
 
 }
