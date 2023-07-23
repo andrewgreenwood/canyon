@@ -89,12 +89,14 @@ void receiveMpu401Data()
 
         if (expectedLength == 0) {
             #ifdef WITH_SERIAL
-            Serial.println("Not supported - ignoring status:");
-            Serial.println(message.status);
+            Serial.print("Not supported - ignoring status: ");
+            Serial.print(message.status, HEX);
+            Serial.println("");
             #endif
             // Not a supported message - ignore it and wait for the next
             // status byte
             message.status = 0;
+            length = 0;
         } else if (length == expectedLength) {
             midiBuffer.put(message);
 
@@ -130,7 +132,7 @@ void fail(int count)
 }
 
 // TODO: Increase this to 16 eventually
-#define NUMBER_OF_MIDI_CHANNELS 8
+#define NUMBER_OF_MIDI_CHANNELS 4
 
 class MidiControl {
     public:
@@ -287,6 +289,16 @@ class MidiControl {
                 return;
             }
 
+#ifdef WITH_SERIAL
+            Serial.print("MIDI channel ");
+            Serial.print(channel);
+            Serial.print(" controller ");
+            Serial.print(controller);
+            Serial.print(" value ");
+            Serial.print(value);
+            Serial.println("");
+#endif
+
             #define CHANNEL_CONTROLLER_CASE(controller, method, member, value) \
                 case controller: \
                     m_channelData[channel].member = value; \
@@ -322,12 +334,14 @@ class MidiControl {
                 // 105 - 115    percussion, cymbal
                 // 116 - 127    percussion, hi-hat
                 case 9:
-                    // TODO: Free all channel notes when channel type or synth type changes
+                {
+                    OPL3::ChannelType newChannelType = m_channelData[channel].type;
+                    
                     if (value < 24) {
-                        m_channelData[channel].type = OPL3::Melody2OpChannelType;
+                        newChannelType = OPL3::Melody2OpChannelType;
                         m_channelData[channel].synthType = value < 12 ? 0 : 1;
                     } else if (value < 72) {
-                        m_channelData[channel].type = OPL3::Melody4OpChannelType;
+                        newChannelType = OPL3::Melody4OpChannelType;
                         if (value < 36) {
                             m_channelData[channel].synthType = 0;
                         } else if (value < 48) {
@@ -338,24 +352,37 @@ class MidiControl {
                             m_channelData[channel].synthType = 3;
                         }
                     } else if (value < 83) {
-                        m_channelData[channel].type = OPL3::KickChannelType;
+                        newChannelType = OPL3::KickChannelType;
                     } else if (value < 94) {
-                        m_channelData[channel].type = OPL3::SnareChannelType;
+                        newChannelType = OPL3::SnareChannelType;
                     } else if (value < 105) {
-                        m_channelData[channel].type = OPL3::TomTomChannelType;
+                        newChannelType = OPL3::TomTomChannelType;
                     } else if (value < 116) {
-                        m_channelData[channel].type = OPL3::CymbalChannelType;
+                        newChannelType = OPL3::CymbalChannelType;
                     } else {
-                        m_channelData[channel].type = OPL3::HiHatChannelType;
+                        newChannelType = OPL3::HiHatChannelType;
                     }
-                    // broken
-                    //value /= 22;
-                    //stopAllSounds();
-                    //opl3.setChannelType(value < 2 ? OPL3::Melody2OpChannelType : OPL3::Melody4OpChannelType);
-                    //m_channelData[channel].synthType = value;
+
+                    if (m_channelData[channel].type != newChannelType) {
+                        stopAllNotes(channel, true);
+                        m_channelData[channel].type = newChannelType;
+                    }
+
                     break;
-                
-                //CHANNEL_CONTROLLER_CASE(9, setSynthType, synthType, value / 21);
+                }
+
+                case 120:   // All sound off
+                    stopAllNotes(channel, true);
+                    break;
+
+                case 121:   // Reset controllers to default values
+                    // TODO
+                    break;
+
+                case 123:   // All notes off
+                    stopAllNotes(channel, false);
+                    break;
+
                 CHANNEL_CONTROLLER_CASE(10, setOutput, outputs, (value < 43 ? 0x2 : (value > 85 ? 0x1 : 0x3)));
 
                 // Operator 1
@@ -421,25 +448,30 @@ class MidiControl {
         }
 
     private:
-        void stopAllSounds()
+        void stopAllNotes(
+            uint8_t channel,
+            bool immediate = false)
         {
-            unsigned int channel;
+            uint8_t opl3Channel;
 
             for (int noteSlot = 0; noteSlot < OPL3::NumberOfChannels; ++ noteSlot) {
-                channel = m_playingNotes[noteSlot].opl3Channel;
-                if (channel != UnusedOpl3Channel) {
-                    for (int op = 0; op < 4; ++ op) {
-                        opl3.setReleaseRate(channel, op, 15);
-                        opl3.setAttenuation(channel, op, 63);
+                opl3Channel = m_playingNotes[noteSlot].opl3Channel;
+                if ((channel == m_playingNotes[noteSlot].midiChannel) && (opl3Channel != UnusedOpl3Channel)) {
+                    if (immediate) {
+                        // Max attenuation and release rate for all operators
+                        for (int op = 0; op < 4; ++ op) {
+                            opl3.setReleaseRate(opl3Channel, op, 15);
+                            opl3.setAttenuation(opl3Channel, op, 63);
+                        }
                     }
+
+                    opl3.keyOff(opl3Channel);
+                    opl3.freeChannel(opl3Channel);
+
+                    m_playingNotes[noteSlot].midiChannel = 0;
+                    m_playingNotes[noteSlot].opl3Channel = UnusedOpl3Channel;
+                    m_playingNotes[noteSlot].midiNote = 0;                
                 }
-
-                opl3.keyOff(channel);
-                opl3.freeChannel(channel);
-
-                m_playingNotes[noteSlot].midiChannel = 0;
-                m_playingNotes[noteSlot].opl3Channel = UnusedOpl3Channel;
-                m_playingNotes[noteSlot].midiNote = 0;                
             }
 
             m_numberOfPlayingNotes = 0;
@@ -662,6 +694,7 @@ void serviceMidiInput()
         diagnosticLedBrightness = 0xff;
 
         if (midiBuffer.get(message)) {
+            //printMidiMessage(message);
 #ifdef TEST_MODE
             switch (message.status) {
                 case 0x90:

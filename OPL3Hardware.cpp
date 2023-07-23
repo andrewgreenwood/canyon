@@ -349,6 +349,8 @@ uint8_t Hardware::allocateChannel(
                         removeFreeChannel(m_free4OpChannels, m_numberOfFree4OpChannels, candidates[i]);
                         // We'll be using the first channel of the pair - leave 2nd one free
                         addFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, candidates[i] + 3);
+                        m_channelParameters[candidates[i]].type = Melody2OpChannelType;
+                        m_channelParameters[candidates[i] + 3].type = Melody2OpChannelType;
                         channel = candidates[i];
                         break;
                     }
