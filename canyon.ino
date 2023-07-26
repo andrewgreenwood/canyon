@@ -137,7 +137,8 @@ void fail(int count)
 class MidiControl {
     public:
         MidiControl()
-        : m_numberOfPlayingNotes(0)
+        : m_numberOfPlayingNotes(0),
+          m_previousMillis(millis())
         {
             for (int i = 0; i < NUMBER_OF_MIDI_CHANNELS; ++ i) {
                 m_channelData[i].type = OPL3::Melody2OpChannelType;
@@ -153,12 +154,12 @@ class MidiControl {
                     m_channelData[i].operatorData[op].waveform = 0;
                     m_channelData[i].operatorData[op].frequencyMultiplicationFactor = 0;
                 }
+
+                m_channelData[i].lfoStartDelay = 5;     // TESTING
             }
 
             for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
-                m_playingNotes[i].midiChannel = 0;
-                m_playingNotes[i].opl3Channel = UnusedOpl3Channel;
-                m_playingNotes[i].midiNote = 0;
+                m_playingNotes[i].clear();
             }
         }
 
@@ -171,6 +172,9 @@ class MidiControl {
             //opl3.setChannelType(OPL3::Melody2OpChannelType);
             // TODO: Enable/disable this dynamically
             opl3.enablePercussion();
+
+            opl3.setVibratoDepth(true);
+            opl3.setTremoloDepth(false);
         }
 
         void playNote(
@@ -188,6 +192,7 @@ class MidiControl {
             for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
                 if (m_playingNotes[i].opl3Channel == UnusedOpl3Channel) {
                     noteSlot = i;
+                    break;
                 }
             }
 
@@ -196,9 +201,6 @@ class MidiControl {
             }
 
             opl3Channel = opl3.allocateChannel(m_channelData[channel].type);
-            //opl3Channel = opl3.allocateChannel();
-            //Serial.println(opl3Channel);
-            //opl3Channel = opl3.allocateChannel(OPL3::Melody2OpChannelType);
             if (opl3Channel == OPL3::InvalidChannel) {
 #ifdef WITH_SERIAL
                 Serial.println("Cannot allocate OPL3 channel");
@@ -214,22 +216,32 @@ class MidiControl {
 
             opl3.setOutput(opl3Channel, m_channelData[channel].outputs);
             opl3.setSynthType(opl3Channel, m_channelData[channel].synthType);
+            opl3.setFeedbackModulationFactor(opl3Channel, m_channelData[channel].feedbackModulationFactor);
 
             for (int op = 0; op < 4; ++ op) {
-                opl3.setAttenuation(opl3Channel, op, m_channelData[channel].operatorData[op].attenuation);
+                #define SET_OPERATOR_DATA(method, member) \
+                    opl3.method(opl3Channel, op, m_channelData[channel].operatorData[op].member)
 
-                opl3.setAttackRate(opl3Channel, op, m_channelData[channel].operatorData[op].attackRate);
-                opl3.setDecayRate(opl3Channel, op, m_channelData[channel].operatorData[op].decayRate);
-                opl3.setSustainLevel(opl3Channel, op, m_channelData[channel].operatorData[op].sustainLevel);
-                opl3.setReleaseRate(opl3Channel, op, m_channelData[channel].operatorData[op].releaseRate);
-                opl3.setFrequencyMultiplicationFactor(opl3Channel, op, m_channelData[channel].operatorData[op].frequencyMultiplicationFactor);
+                SET_OPERATOR_DATA(setWaveform, waveform);
+                SET_OPERATOR_DATA(setTremolo, tremolo);
+                SET_OPERATOR_DATA(setVibrato, vibrato);
+                SET_OPERATOR_DATA(setAttenuation, attenuation);     // TODO: Consider velocity, velocity-to-level
+                SET_OPERATOR_DATA(setAttackRate, attackRate);
+                SET_OPERATOR_DATA(setDecayRate, decayRate);
+                SET_OPERATOR_DATA(setSustainLevel, sustainLevel);
+                SET_OPERATOR_DATA(setReleaseRate, releaseRate);
+                SET_OPERATOR_DATA(setKeyScaleLevel, keyScaleLevel);
+                SET_OPERATOR_DATA(setEnvelopeScaling, envelopeScaling);
+                SET_OPERATOR_DATA(setFrequencyMultiplicationFactor, frequencyMultiplicationFactor);
+                SET_OPERATOR_DATA(setSustain, sustain);
 
-                opl3.setWaveform(opl3Channel, op, m_channelData[channel].operatorData[op].waveform);
+                #undef SET_OPERATOR_DATA
             }
 
             m_playingNotes[noteSlot].midiChannel = channel;
             m_playingNotes[noteSlot].opl3Channel = opl3Channel;
             m_playingNotes[noteSlot].midiNote = note;
+            m_playingNotes[noteSlot].velocity = velocity;
 
             ++ m_numberOfPlayingNotes;
 
@@ -273,9 +285,7 @@ class MidiControl {
             opl3.keyOff(opl3Channel);
             opl3.freeChannel(opl3Channel);
 
-            m_playingNotes[noteSlot].midiChannel = 0;
-            m_playingNotes[noteSlot].opl3Channel = UnusedOpl3Channel;
-            m_playingNotes[noteSlot].midiNote = 0;
+            m_playingNotes[noteSlot].clear();
 
             -- m_numberOfPlayingNotes;
         }
@@ -385,6 +395,9 @@ class MidiControl {
 
                 CHANNEL_CONTROLLER_CASE(10, setOutput, outputs, (value < 43 ? 0x2 : (value > 85 ? 0x1 : 0x3)));
 
+                // TODO: Don't actually set vibrato/tremolo here, just flag whether
+                // enabled or not and set them after LFO delay
+
                 // Operator 1
                 OPERATOR_CONTROLLER_CASE(18, 0, setWaveform, waveform, value >> 4);
                 OPERATOR_CONTROLLER_CASE(23, 0, setTremolo, tremolo, value >> 6);
@@ -395,7 +408,9 @@ class MidiControl {
                 OPERATOR_CONTROLLER_CASE(88, 0, setSustainLevel, sustainLevel, value >> 3);
                 OPERATOR_CONTROLLER_CASE(89, 0, setReleaseRate, releaseRate, 15 - (value >> 3));
                 OPERATOR_CONTROLLER_CASE(90, 0, setKeyScaleLevel, keyScaleLevel, value >> 5);
+                OPERATOR_CONTROLLER_CASE(80, 0, setEnvelopeScaling, envelopeScaling, value >> 6);
                 OPERATOR_CONTROLLER_CASE(75, 0, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
+                OPERATOR_CONTROLLER_CASE(66, 0, setSustain, sustain, value >> 6);
                 CHANNEL_CONTROLLER_CASE(79, setFeedbackModulationFactor, feedbackModulationFactor, value >> 4);
 
                 // Operator 2
@@ -408,8 +423,10 @@ class MidiControl {
                 OPERATOR_CONTROLLER_CASE(105, 1, setSustainLevel, sustainLevel, value >> 3);
                 OPERATOR_CONTROLLER_CASE(106, 1, setReleaseRate, releaseRate, 15 - (value >> 3));
                 OPERATOR_CONTROLLER_CASE(107, 1, setKeyScaleLevel, keyScaleLevel, value >> 5);
+                OPERATOR_CONTROLLER_CASE(81, 1, setEnvelopeScaling, envelopeScaling, value >> 6);
                 OPERATOR_CONTROLLER_CASE(76, 1, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
-
+                OPERATOR_CONTROLLER_CASE(67, 1, setSustain, sustain, value >> 6);
+                
                 // Operator 3
                 OPERATOR_CONTROLLER_CASE(20, 2, setWaveform, waveform, value >> 4);
                 OPERATOR_CONTROLLER_CASE(25, 2, setTremolo, tremolo, value >> 6);
@@ -420,8 +437,10 @@ class MidiControl {
                 OPERATOR_CONTROLLER_CASE(111, 2, setSustainLevel, sustainLevel, value >> 3);
                 OPERATOR_CONTROLLER_CASE(112, 2, setReleaseRate, releaseRate, 15 - (value >> 3));
                 OPERATOR_CONTROLLER_CASE(113, 2, setKeyScaleLevel, keyScaleLevel, value >> 5);
+                OPERATOR_CONTROLLER_CASE(82, 2, setEnvelopeScaling, envelopeScaling, value >> 6);
                 OPERATOR_CONTROLLER_CASE(77, 2, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
-
+                OPERATOR_CONTROLLER_CASE(68, 2, setSustain, sustain, value >> 6);
+                
                 // Operator 4
                 OPERATOR_CONTROLLER_CASE(21, 3, setWaveform, waveform, value >> 4);
                 OPERATOR_CONTROLLER_CASE(26, 3, setTremolo, tremolo, value >> 6);
@@ -432,8 +451,10 @@ class MidiControl {
                 OPERATOR_CONTROLLER_CASE(117, 3, setSustainLevel, sustainLevel, value >> 3);
                 OPERATOR_CONTROLLER_CASE(118, 3, setReleaseRate, releaseRate, 15 - (value >> 3));
                 OPERATOR_CONTROLLER_CASE(119, 3, setKeyScaleLevel, keyScaleLevel, value >> 5);
+                OPERATOR_CONTROLLER_CASE(83, 3, setEnvelopeScaling, envelopeScaling, value >> 6);
                 OPERATOR_CONTROLLER_CASE(78, 3, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
-                
+                OPERATOR_CONTROLLER_CASE(69, 3, setSustain, sustain, value >> 6);
+                                
                 default:
 #ifdef WITH_SERIAL
                     Serial.print("Unknown controller ");
@@ -445,6 +466,52 @@ class MidiControl {
 
             #undef CHANNEL_CONTROLLER_CASE
             #undef OPERATOR_CONTROLLER_CASE
+        }
+
+        void service()
+        {
+            unsigned long elapsedMillis = millis() - m_previousMillis;
+
+            if (elapsedMillis == 0)
+                return;
+
+            m_previousMillis = millis();
+
+            for (int noteSlot = 0; noteSlot < OPL3::NumberOfChannels; ++ noteSlot) {
+                NoteData &note = m_playingNotes[noteSlot];
+                if (note.opl3Channel != UnusedOpl3Channel) {
+                    // We stop caring about note duration after 32.767 seconds (TODO: check this!)
+                    uint16_t newDuration = note.duration + elapsedMillis;
+                    if (newDuration > 32767) {
+                        newDuration = 32767;
+                    }
+
+                    note.duration = newDuration;
+
+                    // LFO start delay handling (controls OPL3 vibrato/tremolo)
+                    int lfoStartDelay = m_channelData[note.midiChannel].lfoStartDelay;
+                    lfoStartDelay *= 150;
+                    if ((newDuration > lfoStartDelay) && (!note.lfoTriggered)) {
+                        note.lfoTriggered = true;
+                        Serial.print(note.opl3Channel);
+                        Serial.println(" - enabling vibrato");
+                        for (int op = 0; op < 4; ++ op) {
+                            // TODO: Set vibrato or tremolo based on whether those are enabled
+                            // for this operator
+                            //if (m_channelData[midiChannel].tremolo) {
+                                opl3.setTremolo(note.opl3Channel, op, true);
+                            //}
+                        }
+                    }
+
+                    if ((newDuration == 32767) || (newDuration % 500 == 0)) {
+                        Serial.print(noteSlot);
+                        Serial.print(" --> ");
+                        Serial.print(newDuration);
+                        Serial.println("");
+                    }
+                }
+            }
         }
 
     private:
@@ -468,9 +535,7 @@ class MidiControl {
                     opl3.keyOff(opl3Channel);
                     opl3.freeChannel(opl3Channel);
 
-                    m_playingNotes[noteSlot].midiChannel = 0;
-                    m_playingNotes[noteSlot].opl3Channel = UnusedOpl3Channel;
-                    m_playingNotes[noteSlot].midiNote = 0;                
+                    m_playingNotes[noteSlot].clear();
                 }
             }
 
@@ -483,9 +548,23 @@ class MidiControl {
         };
 
         typedef struct __attribute__((packed)) NoteData {
+            void clear()
+            {
+                midiChannel = 0;
+                opl3Channel = UnusedOpl3Channel;
+                midiNote = 0;
+                velocity = 0;
+                duration = 0;
+                lfoTriggered = false;
+            }
+
             unsigned midiChannel    : 4;
             unsigned opl3Channel    : 5;
             unsigned midiNote       : 7;
+            unsigned velocity       : 7;
+            unsigned duration       : 15;    // in milliseconds
+            unsigned lfoTriggered   : 1;
+            unsigned padding        : 1;
         } NoteData;
 
         unsigned int m_numberOfPlayingNotes;
@@ -506,17 +585,22 @@ class MidiControl {
                 unsigned keyScaleLevel  : 2;
                 unsigned waveform       : 3;
                 unsigned frequencyMultiplicationFactor  : 4;
-                unsigned sustain        : 1;    // TODO
+                unsigned sustain        : 1;
                 unsigned tremolo        : 1;
                 unsigned vibrato        : 1;
+                unsigned envelopeScaling : 1;
             } operatorData[4];
+
+            unsigned lfoStartDelay      : 4;    // Affects vibrato/tremolo
         } MidiChannelData;
 
         // Maybe one day we'll support multiple channels
         MidiChannelData m_channelData[NUMBER_OF_MIDI_CHANNELS];
+
+        unsigned long m_previousMillis;
 };
 
-MidiControl g_midiControl;
+MidiControl midiControl;
 
 void setup()
 {
@@ -530,7 +614,9 @@ void setup()
 
     isaBus.reset();
 
+#ifdef WITH_SERIAL
     Serial.print("Initialising OPL3SA... ");
+#endif
     if (!opl3sa.init(mpu401IoBaseAddress, mpu401IRQ, opl3IoBaseAddress)) {
 #ifdef WITH_SERIAL
         Serial.println("Failed");
@@ -591,13 +677,15 @@ void setup()
     */
 
     //opl3.enablePercussion();
-    g_midiControl.init();
+    midiControl.init();
 
 #ifdef WITH_SERIAL
     Serial.println("\nReady!\n");
 #endif
 
     digitalWrite(diagnosticLedPin, LOW);
+
+//    previousMillis = millis();
 }
 
 void printMidiMessage(
@@ -721,15 +809,15 @@ void serviceMidiInput()
             
             switch (message.status & 0xf0) {
                 case 0x80:
-                    g_midiControl.stopNote(channel, message.data[0]);
+                    midiControl.stopNote(channel, message.data[0]);
                     break;
 
                 case 0x90:
-                    g_midiControl.playNote(channel, message.data[0], message.data[1]);
+                    midiControl.playNote(channel, message.data[0], message.data[1]);
                     break;
 
                 case 0xb0:
-                    g_midiControl.setController(channel, message.data[0], message.data[1]);
+                    midiControl.setController(channel, message.data[0], message.data[1]);
                     break;
             };
 #endif
@@ -748,5 +836,6 @@ void loop()
     }
     #endif
 
+    midiControl.service();
     serviceMidiInput();
 }

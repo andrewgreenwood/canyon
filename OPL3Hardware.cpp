@@ -67,8 +67,8 @@ uint32_t getNoteFrequency(
         2450,
         2596,
         2750,
-        2914,
-        3087
+        2913,   // was 2914
+        3086    // was 3087
     };
 
     if (note > 115) {
@@ -90,6 +90,8 @@ Hardware::Hardware(
 : m_isaBus(isaBus),
   m_ioBaseAddress(ioBaseAddress),
   m_allocatedChannelBitmap(0),
+  m_tremoloDepth(false),
+  m_vibratoDepth(false),
   m_percussionMode(false),
   m_kickKeyOn(false),
   m_snareKeyOn(false),
@@ -502,6 +504,34 @@ bool Hardware::freeChannel(
     return true;
 }
 
+bool Hardware::setTremoloDepth(
+    bool depth)
+{
+    m_tremoloDepth = depth;
+    return writeGlobalRegister(GlobalRegisterF,
+                               0x20 | (m_kickKeyOn << 4)
+                                    | (m_snareKeyOn << 3)
+                                    | (m_tomTomKeyOn << 2)
+                                    | (m_cymbalKeyOn << 1)
+                                    | (m_hiHatKeyOn)
+                                    | (m_tremoloDepth << 7)
+                                    | (m_vibratoDepth << 6));
+}
+
+bool Hardware::setVibratoDepth(
+    bool depth)
+{
+    m_vibratoDepth = depth;
+    return writeGlobalRegister(GlobalRegisterF,
+                               0x20 | (m_kickKeyOn << 4)
+                                    | (m_snareKeyOn << 3)
+                                    | (m_tomTomKeyOn << 2)
+                                    | (m_cymbalKeyOn << 1)
+                                    | (m_hiHatKeyOn)
+                                    | (m_tremoloDepth << 7)
+                                    | (m_vibratoDepth << 6));
+}
+
 bool Hardware::setFrequency(
     uint8_t channel,
     uint32_t frequency)
@@ -587,7 +617,9 @@ bool Hardware::keyOn(
                                         | (m_snareKeyOn << 3)
                                         | (m_tomTomKeyOn << 2)
                                         | (m_cymbalKeyOn << 1)
-                                        | (m_hiHatKeyOn));
+                                        | (m_hiHatKeyOn)
+                                        | (m_tremoloDepth << 7)
+                                        | (m_vibratoDepth << 6));
     }
 }
 
@@ -632,8 +664,10 @@ bool Hardware::keyOff(
                                         | (m_snareKeyOn << 3)
                                         | (m_tomTomKeyOn << 2)
                                         | (m_cymbalKeyOn << 1)
-                                        | (m_hiHatKeyOn));
-    }
+                                        | (m_hiHatKeyOn)
+                                        | (m_tremoloDepth << 7)
+                                        | (m_vibratoDepth << 6));
+        }
 }
 
 #define SET_CHANNEL_VALUE(channel, realChannel, member, value, maxValue, channelRegister) \
@@ -1109,6 +1143,12 @@ bool Hardware::writeGlobalRegister(
     writeData(primary, reg & 0x00ff, data);
 
     return true;
+}
+
+bool Hardware::commitGlobalData(
+    GlobalRegister reg) const
+{
+    // TODO - perc/vib depth/trem depth
 }
 
 bool Hardware::commitChannelData(

@@ -142,6 +142,14 @@ class Hardware {
         bool freeChannel(
             uint8_t channel);
 
+        // Global
+        
+        bool setTremoloDepth(
+            bool depth);
+
+        bool setVibratoDepth(
+            bool depth);
+
         // Channel
 
         bool setFrequency(
@@ -269,6 +277,9 @@ class Hardware {
             GlobalRegister reg,
             uint8_t data) const;
 
+        bool commitGlobalData(
+            GlobalRegister reg) const;
+
         bool commitChannelData(
             uint8_t channel,
             ChannelRegister reg) const;
@@ -297,6 +308,9 @@ class Hardware {
         // OPL3 device
         ChannelParameters m_channelParameters[18];
         OperatorParameters m_operatorParameters[36];
+
+        unsigned m_tremoloDepth     : 1;
+        unsigned m_vibratoDepth     : 1;
 
         unsigned m_percussionMode   : 1;
         unsigned m_kickKeyOn        : 1;

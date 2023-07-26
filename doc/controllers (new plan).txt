@@ -21,20 +21,20 @@ CC#     Parameter
 30      Op 3 vibrato on
 31      Op 4 vibrato on
 ---
-66      Op 1 sustain on - TODO
-67      Op 2 sustain on - TODO
-68      Op 3 sustain on - TODO
-69      Op 4 sustain on - TODO
+66      Op 1 sustain on
+67      Op 2 sustain on
+68      Op 3 sustain on
+69      Op 4 sustain on
 ---
 75      Op 1 frequency multiplier (0-15)
 76      Op 2 frequency multiplier (0-15)
 77      Op 3 frequency multiplier (0-15)
 78      Op 4 frequency multiplier (0-15)
 79      Feedback modulation factor (0-7) - op 1 only
-80      Op 1 KSR on - TODO
-81      Op 2 KSR on - TODO
-82      Op 3 KSR on - TODO
-83      Op 4 KSR on - TODO
+80      Op 1 KSR on
+81      Op 2 KSR on
+82      Op 3 KSR on
+83      Op 4 KSR on
 ---
 85      Operator 1 level (0-63)
 86      Op 1 attack (0-15)
@@ -49,18 +49,18 @@ CC#     Parameter
 105     Op 2 sustain (0-15)
 106     Op 2 release (0-15)
 107     Op 2 KSL (0-3)
-108     Operator 3 level (0-63) - TODO
-109     Op 3 attack (0-15) - TODO
-110     Op 3 decay (0-15) - TODO
-111     Op 3 sustain (0-15) - TODO
-112     Op 3 release (0-15) - TODO
-113     Op 3 KSL (0-3) - TODO
-114     Operator 4 level (0-64) - TODO
-115     Op 4 attack (0-15) - TODO
-116     Op 4 decay (0-15) - TODO
-117     Op 4 sustain (0-15) - TODO
-118     Op 4 release (0-15) - TODO
-119     Op 4 KSL (0-3) - TODO
+108     Operator 3 level (0-63)
+109     Op 3 attack (0-15)
+110     Op 3 decay (0-15)
+111     Op 3 sustain (0-15)
+112     Op 3 release (0-15)
+113     Op 3 KSL (0-3)
+114     Operator 4 level (0-64)
+115     Op 4 attack (0-15)
+116     Op 4 decay (0-15)
+117     Op 4 sustain (0-15)
+118     Op 4 release (0-15)
+119     Op 4 KSL (0-3)
 
 
 trem
