@@ -22,6 +22,7 @@
 #include "MIDIBuffer.h"
 #include "MIDI.h"
 #include "ISRState.h"
+#include "freq.h"
 
 const uint16_t mpu401IoBaseAddress  = 0x330;
 const uint8_t  mpu401IRQ            = 5;
@@ -245,7 +246,17 @@ class MidiControl {
 
             ++ m_numberOfPlayingNotes;
 
-            opl3.setFrequency(opl3Channel, OPL3::getNoteFrequency(note));
+#ifdef WITH_SERIAL
+//            Serial.print("Note "); Serial.print(note);
+//            Serial.print(" freq "); Serial.print(getNoteFrequency(note, 0));
+//            Serial.println("");
+#endif
+
+            m_channelData[channel].pitchBend = 0;
+
+            // Frequency table is in thousandths of hz but we want hundredths
+            // TODO: Change freq.c to use hundredths instead
+            opl3.setFrequency(opl3Channel, getNoteFrequency(note, m_channelData[channel].pitchBend) / 10);
 
             opl3.keyOn(opl3Channel);
         }
@@ -510,6 +521,12 @@ class MidiControl {
                         Serial.print(newDuration);
                         Serial.println("");
                     }
+
+                    // Hack to test pitch bend
+                    //m_channelData[note.midiChannel].pitchBend -= 1;
+                    //Serial.print(m_channelData[note.midiChannel].pitchBend);
+                    //Serial.println("");
+                    //opl3.setFrequency(note.opl3Channel, getNoteFrequency(note.midiNote, m_channelData[note.midiChannel].pitchBend) / 10);
                 }
             }
         }
@@ -592,6 +609,7 @@ class MidiControl {
             } operatorData[4];
 
             unsigned lfoStartDelay      : 4;    // Affects vibrato/tremolo
+            signed pitchBend            : 9;    // -200 to +200 cents
         } MidiChannelData;
 
         // Maybe one day we'll support multiple channels

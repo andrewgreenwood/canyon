@@ -16,6 +16,8 @@
 
 namespace OPL3 {
 
+// F-Number = Music Frequency * 2^(20-Block) / 49716 Hz 
+
 uint16_t getFrequencyFnum(
     uint32_t frequencyHundredths,
     uint8_t block)
@@ -26,17 +28,20 @@ uint16_t getFrequencyFnum(
         return 1023;
     }
 
-    return (frequencyHundredths * (524288L >> block)) / 2485800;
+    // This is an integer-only way of doing the above calculation
+    // We bit-shift to take care of the 2^(20-Block) part
+    // THe 2485800 is derived from 49716Hz
+    return (frequencyHundredths * (1048576L >> block)) / 2485800;
 }
 
 uint8_t getFrequencyBlock(
     uint32_t frequencyHundredths)
 {
     // The maximum frequency doubles each time the block number increases.
-    // We start with 48.48Hz and try to find the lowest block that can
+    // We start with 24.24Hz and try to find the lowest block that can
     // represent the desired frequency, for the greatest accuracy.
     uint8_t block;
-    uint32_t maxFrequency = 4848;
+    uint32_t maxFrequency = 2424;
 
     for (block = 0; block < 7; ++ block) {
         if (frequencyHundredths < maxFrequency) {
@@ -49,6 +54,8 @@ uint8_t getFrequencyBlock(
     return block;
 }
 
+#if 0
+// replaced by freq.c
 uint32_t getNoteFrequency(
     uint8_t note)
 {
@@ -83,6 +90,7 @@ uint32_t getNoteFrequency(
         return noteFrequencies[note % 12] / 2;
     }
 }
+#endif
 
 Hardware::Hardware(
     ISABus &isaBus,
@@ -546,6 +554,14 @@ bool Hardware::setFrequency(
 
     block = getFrequencyBlock(frequency);
     fnum = getFrequencyFnum(frequency, block);
+
+#if 0
+    Serial.print("block ");
+    Serial.print(block);
+    Serial.print(" fnum ");
+    Serial.print(fnum);
+    Serial.println("");
+#endif
 
     if (isPhysicalChannel(channel)) {
         realChannel = channel;

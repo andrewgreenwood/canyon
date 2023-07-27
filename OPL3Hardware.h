@@ -83,8 +83,10 @@ uint16_t getFrequencyFnum(
 uint8_t getFrequencyBlock(
     uint32_t frequencyHundredths);
 
+#if 0
 uint32_t getNoteFrequency(
     uint8_t note);
+#endif
 
 typedef struct ChannelParameters {
     unsigned type            : 3;   // See 'ChannelType' enum
