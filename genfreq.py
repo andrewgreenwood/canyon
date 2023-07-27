@@ -1,5 +1,7 @@
 # Generate array of 1200 16-bit integer values that represent all frequencies for
 # notes in octave 0 along with cent values
+#
+# Frequencies are in 100ths of hz
 
 import math
 from decimal import Decimal
@@ -25,14 +27,14 @@ print("""#include "freq.h"
 
 uint32_t getNoteFrequency(
     uint8_t note,
-    int8_t cents)
+    int16_t cents)
 {
     const PROGMEM static uint16_t frequencyTable[1200] = {""")
 
 while semitone < 12:
     cent = 0
     octave = math.floor(semitone / 12)
-    value = int(round(freq, 3) * 1000)
+    value = int(round(freq, 2) * 100)
     print('        {}, // {}{}'.format(value, note_names[semitone % 12], octave))
     cent_freq = freq
 
@@ -40,7 +42,7 @@ while semitone < 12:
     suffix = ','
     while cent < 99:
         cent_freq *= cent_scaling
-        value = int(round(cent_freq, 3) * 1000)
+        value = int(round(cent_freq, 2) * 100)
         if semitone == 11 and cent == 98:
             suffix = ''
         print('        {}{}'.format(value, suffix))

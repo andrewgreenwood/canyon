@@ -254,9 +254,7 @@ class MidiControl {
 
             m_channelData[channel].pitchBend = 0;
 
-            // Frequency table is in thousandths of hz but we want hundredths
-            // TODO: Change freq.c to use hundredths instead
-            opl3.setFrequency(opl3Channel, getNoteFrequency(note, m_channelData[channel].pitchBend) / 10);
+            opl3.setFrequency(opl3Channel, getNoteFrequency(note, m_channelData[channel].pitchBend));
 
             opl3.keyOn(opl3Channel);
         }

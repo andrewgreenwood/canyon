@@ -5,7 +5,7 @@
 
 uint32_t getNoteFrequency(
     uint8_t note,
-    int8_t cents);
+    int16_t cents);
 
 #endif
 
