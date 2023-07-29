@@ -8,6 +8,11 @@
     TODO:
         Remove bit-banging support (enabled when USE_SPI is not defined)
         Clean up pins passed to constructor (SPI uses specific pins)
+
+    Interrupts used to be disabled if an ISA bus read/write took place
+    outside of an interrupt handler, but this effectively disables all
+    of the delays. So this code is commented-out for now (but should
+    work so long as interrupts are not enabled in canyon.ino)
 */
 
 #include <arduino.h>
@@ -85,7 +90,7 @@ void ISABus::write(
 #endif
 
     if (!inISR()) {
-        noInterrupts();
+        //noInterrupts();
     }
 
     digitalWrite(m_slaveSelectPin, LOW);
@@ -137,7 +142,7 @@ void ISABus::write(
 #endif
 
     if (!inISR()) {
-        interrupts();
+        //interrupts();
     }
 }
 
@@ -153,7 +158,7 @@ uint8_t ISABus::read(
 #endif
 
     if (!inISR()) {
-        noInterrupts();
+        //noInterrupts();
     }
 
     digitalWrite(m_slaveSelectPin, LOW);
@@ -226,7 +231,7 @@ uint8_t ISABus::read(
     digitalWrite(m_slaveSelectPin, HIGH);
 
     if (!inISR()) {
-        interrupts();
+        //interrupts();
     }
 
 #ifdef PRINT_IO

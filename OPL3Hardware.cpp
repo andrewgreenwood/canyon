@@ -17,21 +17,17 @@
 namespace OPL3 {
 
 // F-Number = Music Frequency * 2^(20-Block) / 49716 Hz 
-
 uint16_t getFrequencyFnum(
     uint32_t frequencyHundredths,
     uint8_t block)
 {
-    if (frequencyHundredths < 3) {
-        return 0;
-    } else if (frequencyHundredths > 620544) {
-        return 1023;
-    }
+    uint16_t fnum = 0;
 
     // This is an integer-only way of doing the above calculation
     // We bit-shift to take care of the 2^(20-Block) part
     // THe 2485800 is derived from 49716Hz
-    return (frequencyHundredths * (1048576L >> block)) / 2485800;
+    fnum = (frequencyHundredths * (1048576L >> block)) / 2485800;
+    return fnum < 1024 ? fnum : 1024;
 }
 
 uint8_t getFrequencyBlock(
@@ -54,44 +50,6 @@ uint8_t getFrequencyBlock(
     return block;
 }
 
-#if 0
-// replaced by freq.c
-uint32_t getNoteFrequency(
-    uint8_t note)
-{
-    int8_t octave;
-    uint32_t multiplier;
-
-    // Frequencies in octave 0
-    const uint16_t noteFrequencies[12] = {
-        1635,
-        1732,
-        1835,
-        1945,
-        2060,
-        2183,
-        2312,
-        2450,
-        2596,
-        2750,
-        2913,   // was 2914
-        3086    // was 3087
-    };
-
-    if (note > 115) {
-        note = 115;
-    }
-
-    octave = (note / 12) - 1;
-    if (octave >= 0) {
-        multiplier = 1 << octave;
-        return noteFrequencies[note % 12] * multiplier;
-    } else {
-        return noteFrequencies[note % 12] / 2;
-    }
-}
-#endif
-
 Hardware::Hardware(
     ISABus &isaBus,
     uint16_t ioBaseAddress)
@@ -109,7 +67,6 @@ Hardware::Hardware(
   m_numberOfFree2OpChannels(0),
   m_numberOfFree4OpChannels(0)
 {
-
     //uint8_t i;
 
     // TODO - init parameters
@@ -125,11 +82,9 @@ bool Hardware::detect() const
     uint8_t status;
 
     // Reset timers
-    //writeData(true, 0x04, 0x60);
     writeGlobalRegister(GlobalRegisterD, 0x60);
 
     // Reset IRQ
-    //writeData(true, 0x04, 0x80);
     writeGlobalRegister(GlobalRegisterD, 0x80);
 
     // Check status
@@ -139,11 +94,9 @@ bool Hardware::detect() const
     }
 
     // Set the timers
-    //writeData(true, 0x02, 0xff);
     writeGlobalRegister(GlobalRegisterB, 0xff);
 
     // Unmask timer 1
-    //writeData(true, 0x04, 0x21);
     writeGlobalRegister(GlobalRegisterD, 0x21);
 
     // Allow the timer to expire
@@ -155,11 +108,9 @@ bool Hardware::detect() const
     status = readStatus();
 
     // Reset timers
-    //writeData(true, 0x04, 0x60);
     writeGlobalRegister(GlobalRegisterD, 0x60);
 
     // Reset IRQ
-    //writeData(true, 0x04, 0x80);
     writeGlobalRegister(GlobalRegisterD, 0x80);
 
     // Fail if OPL2 not detected
@@ -387,7 +338,6 @@ uint8_t Hardware::allocateChannel(
         case Melody4OpChannelType:
             if (m_numberOfFree4OpChannels == 0) {
                 // Maybe we can turn a 2-op channel pair into a 4-op channel?
-                //uint8_t candidates[6][2] = {{0, 3}, {1, 4}, {2, 5}, {9, 12}, {10, 13}, {11, 14}};
                 uint8_t *candidates = fourOpCapableChannels;
                 uint8_t bits = 0;
 
@@ -516,28 +466,51 @@ bool Hardware::setTremoloDepth(
     bool depth)
 {
     m_tremoloDepth = depth;
-    return writeGlobalRegister(GlobalRegisterF,
-                               0x20 | (m_kickKeyOn << 4)
-                                    | (m_snareKeyOn << 3)
-                                    | (m_tomTomKeyOn << 2)
-                                    | (m_cymbalKeyOn << 1)
-                                    | (m_hiHatKeyOn)
-                                    | (m_tremoloDepth << 7)
-                                    | (m_vibratoDepth << 6));
+    return commitGlobalData(GlobalRegisterF);
 }
 
 bool Hardware::setVibratoDepth(
     bool depth)
 {
     m_vibratoDepth = depth;
-    return writeGlobalRegister(GlobalRegisterF,
-                               0x20 | (m_kickKeyOn << 4)
-                                    | (m_snareKeyOn << 3)
-                                    | (m_tomTomKeyOn << 2)
-                                    | (m_cymbalKeyOn << 1)
-                                    | (m_hiHatKeyOn)
-                                    | (m_tremoloDepth << 7)
-                                    | (m_vibratoDepth << 6));
+    return commitGlobalData(GlobalRegisterF);
+}
+
+ChannelType Hardware::getChannelType(
+    uint8_t channel) const
+{
+    if (!isValidChannel(channel)) {
+        return NullChannelType;
+    }
+
+    if (isPhysicalChannel(channel)) {
+        return (ChannelType)m_channelParameters[channel].type;
+    } else {
+        switch (channel) {
+            case KickChannel:
+                return m_percussionMode ? KickChannelType
+                                        : NullChannelType;
+
+            case SnareChannel:
+                return m_percussionMode ? SnareChannelType
+                                        : NullChannelType;
+
+            case TomTomChannel:
+                return m_percussionMode ? TomTomChannelType
+                                        : NullChannelType;
+
+            case CymbalChannel:
+                return m_percussionMode ? CymbalChannelType
+                                        : NullChannelType;
+
+            case HiHatChannel:
+                return m_percussionMode ? HiHatChannelType
+                                        : NullChannelType;
+
+            default:
+                return NullChannelType;
+        }
+    };
 }
 
 bool Hardware::setFrequency(
@@ -628,14 +601,7 @@ bool Hardware::keyOn(
                 return false;
         }
 
-        return writeGlobalRegister(GlobalRegisterF,
-                                   0x20 | (m_kickKeyOn << 4)
-                                        | (m_snareKeyOn << 3)
-                                        | (m_tomTomKeyOn << 2)
-                                        | (m_cymbalKeyOn << 1)
-                                        | (m_hiHatKeyOn)
-                                        | (m_tremoloDepth << 7)
-                                        | (m_vibratoDepth << 6));
+        return commitGlobalData(GlobalRegisterF);
     }
 }
 
@@ -675,15 +641,8 @@ bool Hardware::keyOff(
                 return false;
         }
 
-        return writeGlobalRegister(GlobalRegisterF,
-                                   0x20 | (m_kickKeyOn << 4)
-                                        | (m_snareKeyOn << 3)
-                                        | (m_tomTomKeyOn << 2)
-                                        | (m_cymbalKeyOn << 1)
-                                        | (m_hiHatKeyOn)
-                                        | (m_tremoloDepth << 7)
-                                        | (m_vibratoDepth << 6));
-        }
+        return commitGlobalData(GlobalRegisterF);
+    }
 }
 
 #define SET_CHANNEL_VALUE(channel, realChannel, member, value, maxValue, channelRegister) \
@@ -788,6 +747,133 @@ bool Hardware::setSynthType(
     m_operatorParameters[op].member = value; \
     return commitOperatorData(op, operatorRegister);
 
+unsigned int Hardware::getOperatorCount(
+    uint8_t channel) const
+{
+    if (!isValidChannel(channel)) {
+        return 0;
+    }
+
+    switch (getChannelType(channel)) {
+        case SnareChannelType:
+        case TomTomChannelType:
+        case CymbalChannelType:
+        case HiHatChannelType:
+            return 1;
+
+        case Melody2OpChannelType:
+        case KickChannelType:
+            return 2;
+
+        case Melody4OpChannelType:
+            return 4;
+
+        default:
+            return 0;
+    };
+}
+
+// TODO: Check if this is correct for percussion
+OperatorType Hardware::getOperatorType(
+    uint8_t channel,
+    uint8_t channelOperator) const
+{
+    OperatorType type = NullOperatorType;
+
+    if ((!isValidChannel(channel)) || (channelOperator >= getOperatorCount(channel))) {
+        return NullOperatorType;
+    }
+
+    switch (getChannelType(channel)) {
+        case SnareChannelType:
+        case TomTomChannelType:
+        case CymbalChannelType:
+        case HiHatChannelType:
+            if (channelOperator == 0) {
+                type = CarrierOperatorType;
+            }
+            break;
+
+        case Melody2OpChannelType:
+        case KickChannelType:
+            switch (m_channelParameters[channel].synthType) {
+                case 0:
+                    switch (channelOperator) {
+                        case 0:
+                            type = ModulatorOperatorType;
+                            break;
+                        case 1:
+                            type = CarrierOperatorType;
+                            break;
+                    }
+                    break;
+
+                case 1:
+                    type = CarrierOperatorType;
+                    break;
+            }
+            break;
+
+        case Melody4OpChannelType:
+            switch (m_channelParameters[channel].synthType) {
+                case 0:
+                    switch (channelOperator) {
+                        case 0:
+                        case 1:
+                        case 2:
+                            type = ModulatorOperatorType;
+                            break;
+
+                        case 3:
+                            type = CarrierOperatorType;
+                            break;
+                    }
+                    break;
+
+                case 1:
+                    switch (channelOperator) {
+                        case 0:
+                        case 3:
+                            type = CarrierOperatorType;
+                            break;
+                        case 1:
+                        case 2:
+                            type = ModulatorOperatorType;
+                            break;
+                    }
+                    break;
+
+                case 2:
+                    switch (channelOperator) {
+                        case 0:
+                        case 2:
+                            type = ModulatorOperatorType;
+                            break;
+                        case 1:
+                        case 3:
+                            type = CarrierOperatorType;
+                            break;
+                    }
+                    break;
+
+                case 3:
+                    switch (channelOperator) {
+                        case 0:
+                        case 2:
+                        case 3:
+                            type = CarrierOperatorType;
+                            break;
+                        case 1:
+                            type = ModulatorOperatorType;
+                            break;
+                    }
+                    break;
+            }
+    };
+
+    return type;
+}
+
 bool Hardware::setTremolo(
     uint8_t channel,
     uint8_t channelOperator,
@@ -882,43 +968,6 @@ bool Hardware::setWaveform(
     uint8_t waveform)
 {
     SET_OPERATOR_VALUE(channel, channelOperator, waveform, waveform, 7, OperatorRegisterE);
-}
-
-ChannelType Hardware::getChannelType(
-    uint8_t channel) const
-{
-    if (!isValidChannel(channel)) {
-        return NullChannelType;
-    }
-
-    if (isPhysicalChannel(channel)) {
-        return (ChannelType)m_channelParameters[channel].type;
-    } else {
-        switch (channel) {
-            case KickChannel:
-                return m_percussionMode ? KickChannelType
-                                        : NullChannelType;
-
-            case SnareChannel:
-                return m_percussionMode ? SnareChannelType
-                                        : NullChannelType;
-
-            case TomTomChannel:
-                return m_percussionMode ? TomTomChannelType
-                                        : NullChannelType;
-
-            case CymbalChannel:
-                return m_percussionMode ? CymbalChannelType
-                                        : NullChannelType;
-
-            case HiHatChannel:
-                return m_percussionMode ? HiHatChannelType
-                                        : NullChannelType;
-
-            default:
-                return NullChannelType;
-        }
-    };
 }
 
 bool Hardware::isValidChannel(
@@ -1068,32 +1117,6 @@ void Hardware::removeFreeChannel(
     -- freeCount;
 }
 
-unsigned int Hardware::getOperatorCount(
-    uint8_t channel) const
-{
-    if (!isValidChannel(channel)) {
-        return 0;
-    }
-
-    switch (getChannelType(channel)) {
-        case SnareChannelType:
-        case TomTomChannelType:
-        case CymbalChannelType:
-        case HiHatChannelType:
-            return 1;
-
-        case Melody2OpChannelType:
-        case KickChannelType:
-            return 2;
-
-        case Melody4OpChannelType:
-            return 4;
-
-        default:
-            return 0;
-    };
-}
-
 uint8_t Hardware::getChannelOperator(
     uint8_t channel,
     uint8_t operatorIndex) const
@@ -1164,7 +1187,18 @@ bool Hardware::writeGlobalRegister(
 bool Hardware::commitGlobalData(
     GlobalRegister reg) const
 {
-    // TODO - perc/vib depth/trem depth
+    if (reg == GlobalRegisterF) {
+        return writeGlobalRegister(GlobalRegisterF,
+                               0x20 | (m_kickKeyOn << 4)
+                                    | (m_snareKeyOn << 3)
+                                    | (m_tomTomKeyOn << 2)
+                                    | (m_cymbalKeyOn << 1)
+                                    | (m_hiHatKeyOn)
+                                    | (m_tremoloDepth << 7)
+                                    | (m_vibratoDepth << 6));
+    } else {
+        return false;
+    }
 }
 
 bool Hardware::commitChannelData(

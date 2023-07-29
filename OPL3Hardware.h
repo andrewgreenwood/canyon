@@ -12,17 +12,6 @@
 #include <stdint.h>
 #include "ISABus.h"
 
-/*
-#define OPL3_KICK_CHANNEL           18
-#define OPL3_SNARE_CHANNEL          19
-#define OPL3_TOMTOM_CHANNEL         20
-#define OPL3_CYMBAL_CHANNEL         21
-#define OPL3_HIHAT_CHANNEL          22
-
-#define OPL3_MAX_CHANNEL            OPL3_HIHAT_CHANNEL
-#define OPL3_NUMBER_OF_CHANNELS     (OPL3_MAX_CHANNEL + 1)
-*/
-
 namespace OPL3 {
 
 enum {
@@ -75,6 +64,11 @@ typedef enum {
     HiHatChannelType     = 7
 } ChannelType;
 
+typedef enum {
+    NullOperatorType      = 0,
+    CarrierOperatorType   = 1,
+    ModulatorOperatorType = 2
+} OperatorType;
 
 uint16_t getFrequencyFnum(
     uint32_t frequencyHundredths,
@@ -82,11 +76,6 @@ uint16_t getFrequencyFnum(
 
 uint8_t getFrequencyBlock(
     uint32_t frequencyHundredths);
-
-#if 0
-uint32_t getNoteFrequency(
-    uint8_t note);
-#endif
 
 typedef struct ChannelParameters {
     unsigned type            : 3;   // See 'ChannelType' enum
@@ -154,6 +143,9 @@ class Hardware {
 
         // Channel
 
+        ChannelType getChannelType(
+            uint8_t channel) const;
+
         bool setFrequency(
             uint8_t channel,
             uint32_t frequency);
@@ -177,6 +169,13 @@ class Hardware {
             uint8_t type);
 
         // Operator
+
+        unsigned int getOperatorCount(
+            uint8_t channel) const;
+
+        OperatorType getOperatorType(
+            uint8_t channel,
+            uint8_t channelOperator) const;
 
         bool setTremolo(
             uint8_t channel,
@@ -239,9 +238,6 @@ class Hardware {
             uint8_t waveform);
 
     private:
-        ChannelType getChannelType(
-            uint8_t channel) const;
-
         bool isValidChannel(
             uint8_t channel) const;
 
@@ -267,9 +263,6 @@ class Hardware {
             uint8_t *list,
             uint8_t &freeCount,
             uint8_t channel);
-
-        unsigned int getOperatorCount(
-            uint8_t channel) const;
 
         uint8_t getChannelOperator(
             uint8_t channel,
@@ -326,22 +319,6 @@ class Hardware {
 
         uint8_t m_free4OpChannels[6];
         uint8_t m_numberOfFree4OpChannels;
-
-#if 0
-        // Channels 6 thru 8 are considered last when allocating channels, as
-        // any use of percussion will render them unavailable. Channels that
-        // can function in 4-op mode are allocated in pairs when used as 2-op.
-        const uint8_t melody2OpChannelPriority[19] = {
-            15, 16, 17, 0, 3, 1, 4, 2, 5, 9, 12, 10, 13, 11, 14, 6, 7, 8,
-            InvalidChannel
-        };
-
-        // Search backwards to ensure minimal conflicts with 2-op channels.
-        const uint8_t melody4OpChannelPriority[7] = {
-            11, 10, 9, 2, 1, 0,
-            InvalidChannel
-        };
-#endif
 };
 
 }

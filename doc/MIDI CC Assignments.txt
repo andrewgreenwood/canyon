@@ -1,0 +1,140 @@
+CC#     Parameter
+---------------------------------------------------------------------
+0   X   Bank select (MSB)
+1   -   Modulation wheel (MSB) - TODO
+2   X   Breath controller (MSB)
+3   X   - (MSB)
+4   X   Foot pedal (MSB)
+5   X   Portamento time (MSB)
+6   X   Data entry (MSB)
+7   -   Volume (MSB) (affect the sound generating operators) - TODO
+8   X   Balance (MSB)
+9   O   Synthesis type (6 types, 0-22, increments of 21, 105-127 ?), perc? - TODO
+10  O   Pan (MSB) (0-42 left, 43-85 middle, 86-127 right)
+11  X   Expression (MSB)
+12  X   Effect controller 1 (MSB)
+13  X   Effect controller 2 (MSB)
+14  O   Op 1 velocity to level (MSB)
+15  O   Op 2 velocity to level (MSB)
+16  O   General purpose 1 / Op 3 velocity to level (MSB)
+17  O   General purpose 2 / Op 4 velocity to level (MSB)
+18  O   Op 1 waveform select
+19  O   Op 2 waveform select
+20  O   Op 3 waveform select
+21  O   Op 4 waveform select
+22  -   Tremolo depth (global) - TODO
+23  O   Op 1 tremolo on
+24  O   Op 2 tremolo on
+25  O   Op 3 tremolo on
+26  O   Op 4 tremolo on
+27  -   Vibrato depth (global) - TODO
+28  O   Op 1 vibrato on
+29  O   Op 2 vibrato on
+30  O   Op 3 vibrato on
+31  O   Op 4 vibrato on
+
+32  X   Bank select (LSB)
+33  X   Modulation wheel (LSB)
+34  X   Breath controller (LSB)
+35  X   - (LSB)
+36  X   Foot pedal (LSB)
+37  X   Portamento time (LSB)
+38  X   Data entry (LSB)
+39  X   Volume (LSB)
+40  X   Balance (LSB)
+41  X   - (LSB)
+42  X   Pan (LSB)
+43  X   Expression (LSB)
+44  X   Effect controller 1 (LSB)
+45  X   Effect controller 2 (LSB)
+46  X   - (LSB)
+47  X   - (LSB)
+48  X   General purpose 1 (LSB)
+49  X   General purpose 2 (LSB)
+50  X   - (LSB)
+51  X   - (LSB)
+52  X   - (LSB)
+53  X   - (LSB)
+54  X   - (LSB)
+55  X   - (LSB)
+56  X   - (LSB)
+57  X   - (LSB)
+58  X   - (LSB)
+59  X   - (LSB)
+60  X   - (LSB)
+61  X   - (LSB)
+62  X   - (LSB)
+63  X   - (LSB)
+
+64  -   Sustain (on/off) - TODO
+65  -   Portamento (on/off)
+66  -   Op 1 sustain on     - TODO: disable these and set this permanently on
+67  -   Op 2 sustain on
+68  -   Op 3 sustain on
+69  -   Op 4 sustain on
+70  X   Sound controller 1 (sound variation)
+71  X   Sound controller 2 (VCF resonance)
+72  X   Sound controller 3 (VCA release time)
+73  X   Sound controller 4 (VCA attack time)
+74  X   Sound controller 5 (VCF cutoff frequency)
+75  O   Sound controller 6 / Op 1 frequency multiplier (0-15)
+76  O   Sound controller 7 / Op 2 frequency multiplier (0-15)
+77  O   Sound controller 8 / Op 3 frequency multiplier (0-15)
+78  O   Sound controller 9 / Op 4 frequency multiplier (0-15)
+79  O   Sound controller 10 / Op 1 feedback modulation factor (0-7)
+80  O   General purpose switch 1 / Op 1 KSR on
+81  O   General purpose switch 2 / Op 2 KSR on
+82  O   General purpose switch 3 / Op 3 KSR on
+83  O   General purpose switch 4 / Op 4 KSR on
+84  X   Portamento amount
+85  O   Op 1 level (0-63)
+86  O   Op 1 attack (0-15)
+87  O   Op 1 decay (0-15)
+88  O   Op 1 sustain (0-15)
+89  O   Op 1 release (0-15)
+90  O   Op 1 KSL (0-3)
+91  X   Effect 1 depth (reverb)
+92  X   Effect 2 depth (tremolo) - TODO?
+93  X   Effect 3 depth (chorus)
+94  X   Effect 4 depth (detune)
+95  X   Effect 5 depth (phaser)
+96  X   Data increment
+97  X   Data decrement
+98  X   NRPN (LSB)
+99  X   NRPN (MSB)
+100 X   RPN (LSB)
+101 X   RPN (MSB)
+102 O   Operator 2 level (0-63)
+103 O   Op 2 attack (0-15)
+104 O   Op 2 decay (0-15)
+105 O   Op 2 sustain (0-15)
+106 O   Op 2 release (0-15)
+107 O   Op 2 KSL (0-3)
+108 O   Operator 3 level (0-63)
+109 O   Op 3 attack (0-15)
+110 O   Op 3 decay (0-15)
+111 O   Op 3 sustain (0-15)
+112 O   Op 3 release (0-15)
+113 O   Op 3 KSL (0-3)
+114 O   Operator 4 level (0-64)
+115 O   Op 4 attack (0-15)
+116 O   Op 4 decay (0-15)
+117 O   Op 4 sustain (0-15)
+118 O   Op 4 release (0-15)
+119 O   Op 4 KSL (0-3)
+
+120 O   All sound off
+121 X   Reset all controllers
+122 X   Local control (on/off)
+123 O   All notes off
+124 X   Omni off
+125 X   Omni on
+126 X   Mono mode
+127 X   Poly mode
+
+
+TODO:
+- Vibrato depth (global)
+- Tremolo depth (global)
+- Velocity-to-level (operator)
+- LFO start delay (channel)
