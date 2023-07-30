@@ -209,23 +209,28 @@ class MidiControl {
                 }
             }
 
-            if (!noteData) {
-                // Try to steal a note that is releasing
-                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
-                    if (m_playingNotes[i].releasing) {
-                        noteData = &m_playingNotes[i];
-                        opl3.freeChannel(noteData->opl3Channel);
-                        noteData->clear();
-                        break;
-                    }
-                }
-            }
-
             //if (noteSlot == NoNoteSlot) {
             if (!noteData)
                 return;
 
             opl3Channel = opl3.allocateChannel(m_channelData[channel].type);
+
+            if (opl3Channel == OPL3::InvalidChannel) {
+                // Try to steal a channel for a note that is in the release phase
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+                    if (m_playingNotes[i].releasing) {
+                        noteData = &m_playingNotes[i];
+                        Serial.print("Stealing ");
+                        Serial.println(noteData->opl3Channel);
+                        //opl3.freeChannel(noteData->opl3Channel);
+                        opl3Channel = noteData->opl3Channel;
+                        noteData->clear();
+                        -- m_numberOfPlayingNotes;
+                        break;
+                    }
+                }
+            }
+
             if (opl3Channel == OPL3::InvalidChannel) {
 #ifdef WITH_SERIAL
                 Serial.println("Cannot allocate OPL3 channel");
@@ -690,7 +695,10 @@ class MidiControl {
                             switch (m_channelData[note.midiChannel].operatorData[op].releaseRate) {
                                 case 0:
                                     // Indefinite - keep resetting the duration
-                                    expectedOperatorReleaseDuration = 0;
+                                    // The note will only silence when the note slot is re-used due
+                                    // to no others being available
+                                    // This doesn't seem useful - TODO: Don't support this value?
+                                    note.releaseDuration = 0;
                                     break;
                                 case 1:
                                     expectedOperatorReleaseDuration = 18000;
@@ -787,23 +795,29 @@ class MidiControl {
         {
             FOR_EACH_PLAYING_NOTE(channel, note,
                 for (int op = 0; op < opl3.getOperatorCount(note.opl3Channel); ++ op) {
-                    uint16_t level;
                     uint16_t operatorLevel = m_channelData[channel].operatorData[op].level;
                     uint16_t velocityToLevel = m_channelData[channel].operatorData[op].velocityToLevel;
+                    uint16_t baseLevel;
+                    uint16_t velocityLevelRange;
+                    uint16_t level;
 
-                    // Adjust level based on velocity
-                    level = ((velocityToLevel * (note.velocity >> 1)) / 63);
-                    //Serial.print(op);
-                    //Serial.print(": ");
-                    //Serial.print(level);
-                    //Serial.print("   ");
-                    level += (((63 - velocityToLevel) * 63) / operatorLevel);
-                    //Serial.println(level);
+                    velocityLevelRange = (velocityToLevel * operatorLevel) / 63;
+                    baseLevel = operatorLevel - velocityLevelRange;
+                    level = ((note.velocity >> 1) * velocityLevelRange) / 63;
+
+                    //Serial.print("op "); Serial.print(op);
+                    //Serial.print(" velocityLevelRange:"); Serial.print(velocityLevelRange);
+                    //Serial.print(" baseLevel:"); Serial.print(baseLevel);
+                    level += baseLevel;
+                    //Serial.print(" level:"); Serial.print(level);
                     
                     // Scale level based on channel volume for carriers
                     if (opl3.getOperatorType(note.opl3Channel, op) == OPL3::CarrierOperatorType) {
                         level = (level * m_channelData[channel].volume) / 63;
                     }
+
+                    //Serial.print(" -- final:");
+                    //Serial.println(level);
 
                     opl3.setAttenuation(note.opl3Channel, op, 63 - level);
                 }
