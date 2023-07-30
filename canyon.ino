@@ -12,7 +12,7 @@
 //#define USE_MPU401_INTERRUPTS
 
 // Define this to have serial output
-//#define WITH_SERIAL
+#define WITH_SERIAL
 
 #include "ISAPlugAndPlay.h"
 #include "ISABus.h"
@@ -205,8 +205,19 @@ class MidiControl {
             for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
                 if (m_playingNotes[i].opl3Channel == UnusedOpl3Channel) {
                     noteData = &m_playingNotes[i];
-                    //noteSlot = i;
                     break;
+                }
+            }
+
+            if (!noteData) {
+                // Try to steal a note that is releasing
+                for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+                    if (m_playingNotes[i].releasing) {
+                        noteData = &m_playingNotes[i];
+                        opl3.freeChannel(noteData->opl3Channel);
+                        noteData->clear();
+                        break;
+                    }
                 }
             }
 
@@ -312,11 +323,12 @@ class MidiControl {
                     // We'll be called again when the sustain pedal is released
                     if (!m_channelData[channel].sustaining) {
                         opl3.keyOff(opl3Channel);
-                        opl3.freeChannel(opl3Channel);
+                        //opl3.freeChannel(opl3Channel);
 
-                        noteData->clear();
+                        noteData->releasing = true;
+                        //noteData->clear();
 
-                        -- m_numberOfPlayingNotes;
+                        //-- m_numberOfPlayingNotes;
                     } else {
                         noteData->sustained = true;
                     }
@@ -455,11 +467,12 @@ class MidiControl {
                                 note.sustained = false;
                                 
                                 opl3.keyOff(note.opl3Channel);
-                                opl3.freeChannel(note.opl3Channel);
+                                //opl3.freeChannel(note.opl3Channel);
 
-                                note.clear();
+                                note.releasing = true;
+                                //note.clear();
 
-                                -- m_numberOfPlayingNotes;
+                                //-- m_numberOfPlayingNotes;
                             }
                         );
                     }
@@ -662,6 +675,72 @@ class MidiControl {
                         }
                     }
 
+                    if (note.releasing) {
+                        uint16_t newReleaseDuration = note.releaseDuration + elapsedMillis;
+                        if (newReleaseDuration > 32767) {
+                            newReleaseDuration = 32767;
+                        }
+
+                        note.releaseDuration = newReleaseDuration;
+
+                        uint16_t expectedReleaseDuration = 0;
+                        for (int op = 0; op < opl3.getOperatorCount(note.opl3Channel); ++ op) {
+                            uint16_t expectedOperatorReleaseDuration = 0;
+
+                            switch (m_channelData[note.midiChannel].operatorData[op].releaseRate) {
+                                case 0:
+                                    // Indefinite - keep resetting the duration
+                                    expectedOperatorReleaseDuration = 0;
+                                    break;
+                                case 1:
+                                    expectedOperatorReleaseDuration = 18000;
+                                    break;
+                                case 2:
+                                    expectedOperatorReleaseDuration = 10000;
+                                    break;
+                                case 3:
+                                    expectedOperatorReleaseDuration = 4500;
+                                    break;
+                                case 4:
+                                    expectedOperatorReleaseDuration = 2500;
+                                    break;
+                                case 5:
+                                    expectedOperatorReleaseDuration = 1100;
+                                    break;
+                                case 6:
+                                    expectedOperatorReleaseDuration = 500;
+                                    break;
+                                case 7:
+                                    expectedOperatorReleaseDuration = 300;
+                                    break;
+                                case 8:
+                                    expectedOperatorReleaseDuration = 150;
+                                    break;
+                                case 9:
+                                    expectedOperatorReleaseDuration = 75;
+                                    break;
+                                default:
+                                    expectedOperatorReleaseDuration = 50;
+                                    break;
+                            }
+
+                            if (expectedOperatorReleaseDuration > expectedReleaseDuration) {
+                                expectedReleaseDuration = expectedOperatorReleaseDuration;
+                            }
+                        }
+
+                        if (note.releaseDuration > expectedReleaseDuration) {
+                            Serial.println("Release end");
+                            for (int op = 0; op < opl3.getOperatorCount(note.opl3Channel); ++ op) {
+                                opl3.setAttenuation(note.opl3Channel, op, 63);
+                            }
+                            opl3.setFrequency(note.opl3Channel, 0);
+                            opl3.freeChannel(note.opl3Channel);
+                            note.clear();
+                            -- m_numberOfPlayingNotes;
+                        }
+                    }
+
 #if 0
                     if ((newDuration == 32767) || (newDuration % 500 == 0)) {
                         Serial.print(noteSlot);
@@ -690,12 +769,13 @@ class MidiControl {
                             opl3.setReleaseRate(opl3Channel, op, 15);
                             opl3.setAttenuation(opl3Channel, op, 63);
                         }
+                        m_playingNotes[noteSlot].clear();
+                    } else {
+                        m_playingNotes[noteSlot].releasing = true;
                     }
 
                     opl3.keyOff(opl3Channel);
-                    opl3.freeChannel(opl3Channel);
-
-                    m_playingNotes[noteSlot].clear();
+                    //opl3.freeChannel(opl3Channel);
                 }
             }
 
@@ -707,16 +787,22 @@ class MidiControl {
         {
             FOR_EACH_PLAYING_NOTE(channel, note,
                 for (int op = 0; op < opl3.getOperatorCount(note.opl3Channel); ++ op) {
-                    uint8_t level = m_channelData[channel].operatorData[op].level;
-                    uint8_t velocityToLevel = m_channelData[channel].operatorData[op].velocityToLevel;
+                    uint16_t level;
+                    uint16_t operatorLevel = m_channelData[channel].operatorData[op].level;
+                    uint16_t velocityToLevel = m_channelData[channel].operatorData[op].velocityToLevel;
 
                     // Adjust level based on velocity
-                    uint8_t baseLevel = level - velocityToLevel;
-                    level = baseLevel + (((uint16_t)note.velocity * 10) / (1270 / velocityToLevel));
+                    level = ((velocityToLevel * (note.velocity >> 1)) / 63);
+                    //Serial.print(op);
+                    //Serial.print(": ");
+                    //Serial.print(level);
+                    //Serial.print("   ");
+                    level += (((63 - velocityToLevel) * 63) / operatorLevel);
+                    //Serial.println(level);
                     
                     // Scale level based on channel volume for carriers
                     if (opl3.getOperatorType(note.opl3Channel, op) == OPL3::CarrierOperatorType) {
-                        level = ((uint16_t)level * m_channelData[channel].volume) / 63;
+                        level = (level * m_channelData[channel].volume) / 63;
                     }
 
                     opl3.setAttenuation(note.opl3Channel, op, 63 - level);
@@ -797,8 +883,10 @@ class MidiControl {
                 midiNote = 0;
                 velocity = 0;
                 duration = 0;
+                releaseDuration = 0;
                 lfoTriggered = false;
                 sustained = false;
+                releasing = false;
             }
 
             unsigned midiChannel    : 4;
@@ -806,8 +894,10 @@ class MidiControl {
             unsigned midiNote       : 7;
             unsigned velocity       : 7;
             unsigned duration       : 15;   // in milliseconds
+            unsigned releaseDuration: 15;
             unsigned lfoTriggered   : 1;
             unsigned sustained      : 1;    // note off deferred from stopNote until sustain off
+            unsigned releasing      : 1;
         } NoteData;
 
         unsigned int m_numberOfPlayingNotes;
