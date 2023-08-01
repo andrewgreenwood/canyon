@@ -56,7 +56,6 @@ MIDIControl::MIDIControl(OPL3::Hardware &opl3)
 
 void MIDIControl::init()
 {
-    //opl3.setChannelType(OPL3::Melody2OpChannelType);
     // TODO: Enable/disable this dynamically
     //opl3.enablePercussion();
 
@@ -118,7 +117,7 @@ void MIDIControl::playNote(
     m_opl3.setSynthType(opl3Channel, m_channelData[channel].synthType);
     m_opl3.setFeedbackModulationFactor(opl3Channel, m_channelData[channel].feedbackModulationFactor);
 
-    for (int op = 0; op < 4; ++ op) {
+    for (int op = 0; op < m_opl3.getOperatorCount(opl3Channel); ++ op) {
         #define SET_OPERATOR_DATA(method, member) \
             m_opl3.method(opl3Channel, op, m_channelData[channel].operatorData[op].member)
 
@@ -163,12 +162,7 @@ void MIDIControl::stopNote(
     uint8_t note)
 {
     uint8_t opl3Channel = UnusedOpl3Channel;
-    //int noteSlot = NoNoteSlot;
     NoteData *noteData = NULL;
-
-    //Serial.print("stopNote ");
-    //Serial.print(note);
-    //Serial.println("");
 
     if ((channel >= NUMBER_OF_MIDI_CHANNELS) || (note > 0x7f)) {
         return;
@@ -183,10 +177,6 @@ void MIDIControl::stopNote(
             //noteSlot = i;
             noteData = &m_playingNotes[i];
 
-            //if (noteSlot == NoNoteSlot) {
-                //return;
-            //}
-
             opl3Channel = noteData->opl3Channel;
             if (opl3Channel == UnusedOpl3Channel) {
 //                Serial.println("Invalid OPL3 channel");
@@ -195,13 +185,10 @@ void MIDIControl::stopNote(
 
             // We'll be called again when the sustain pedal is released
             if (!m_channelData[channel].sustaining) {
+                // The OPL3 channel will be freed by service() to allow time
+                // for the release phase of envelopes
                 m_opl3.keyOff(opl3Channel);
-                //opl3.freeChannel(opl3Channel);
-
                 noteData->releasing = true;
-                //noteData->clear();
-
-                //-- m_numberOfPlayingNotes;
             } else {
                 noteData->sustained = true;
             }
@@ -237,23 +224,20 @@ void MIDIControl::setController(
             } \
             break;
 
-#if 0
-    #define FOR_EACH_PLAYING_NOTE(index, code) \
-        for (int index = 0; index < OPL3::NumberOfChannels; ++ index) { \
-            if (m_playingNotes[index].midiChannel == channel) { \
-                code; \
-            } \
-        }
-#endif
-
     #define OPERATOR_CONTROLLER_CASE(controller, operatorIndex, method, member, value) \
         case controller: \
             m_channelData[channel].operatorData[operatorIndex].member = value; \
             for (int i = 0; i < OPL3::NumberOfChannels; ++ i) { \
-                if (m_playingNotes[i].midiChannel == channel) \
+                if ((m_playingNotes[i].midiChannel == channel) && (operatorIndex < m_opl3.getOperatorCount(m_playingNotes[i].opl3Channel))) \
                     m_opl3.method(m_playingNotes[i].opl3Channel, operatorIndex, value); \
             } \
             break;
+
+    #define OPERATOR_CONTROLLER_CASES(op1Controller, op2Controller, op3Controller, op4Controller, method, member, value) \
+        OPERATOR_CONTROLLER_CASE(op1Controller, 0, method, member, value) \
+        OPERATOR_CONTROLLER_CASE(op2Controller, 1, method, member, value) \
+        OPERATOR_CONTROLLER_CASE(op3Controller, 2, method, member, value) \
+        OPERATOR_CONTROLLER_CASE(op4Controller, 3, method, member, value)
 
     switch (controller) {
         // Global
@@ -350,23 +334,27 @@ void MIDIControl::setController(
             if (!doSustain) {
                 FOR_EACH_PLAYING_NOTE(channel, note,
                     if (note.sustained) {
-                        note.sustained = false;
-                        
-                        m_opl3.keyOff(note.opl3Channel);
-                        //opl3.freeChannel(note.opl3Channel);
-
+                        note.sustained = false;                        
                         note.releasing = true;
-                        //note.clear();
-
-                        //-- m_numberOfPlayingNotes;
+                        m_opl3.keyOff(note.opl3Channel);
                     }
                 );
             }
             break;
         }
 
+        // Basic operator controls
+        OPERATOR_CONTROLLER_CASES(18, 19, 20, 21, setWaveform, waveform, value >> 4)
+        OPERATOR_CONTROLLER_CASES(86, 103, 109, 115, setAttackRate, attackRate, 15 - (value >> 3))
+        OPERATOR_CONTROLLER_CASES(87, 104, 110, 116, setDecayRate, decayRate, 15 - (value >> 3))
+        OPERATOR_CONTROLLER_CASES(88, 105, 111, 117, setSustainLevel, sustainLevel, 15 - (value >> 3))
+        OPERATOR_CONTROLLER_CASES(89, 106, 112, 118, setReleaseRate, releaseRate, 15 - (value >> 3))
+        OPERATOR_CONTROLLER_CASES(90, 107, 113, 119, setKeyScaleLevel, keyScaleLevel, value >> 5)       // FIXME: need to swap 1 and 2 around
+        OPERATOR_CONTROLLER_CASES(80, 81, 82, 83, setEnvelopeScaling, envelopeScaling, value >> 6)
+        OPERATOR_CONTROLLER_CASES(75, 76, 77, 78, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3)
+
         // Operator 1
-        OPERATOR_CONTROLLER_CASE(18, 0, setWaveform, waveform, value >> 4);
+        //OPERATOR_CONTROLLER_CASE(18, 0, setWaveform, waveform, value >> 4);
         //OPERATOR_CONTROLLER_CASE(23, 0, setTremolo, tremolo, value >> 6);
         case 23:
             // TODO: When tremolo/vibrato being turned on for any operator it should
@@ -387,13 +375,13 @@ void MIDIControl::setController(
             updateAttenuation(channel);
             break;
         }
-        OPERATOR_CONTROLLER_CASE(86, 0, setAttackRate, attackRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(87, 0, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(88, 0, setSustainLevel, sustainLevel, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(89, 0, setReleaseRate, releaseRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(90, 0, setKeyScaleLevel, keyScaleLevel, value >> 5);   // FIXME: need to swap 1 and 2 around
-        OPERATOR_CONTROLLER_CASE(80, 0, setEnvelopeScaling, envelopeScaling, value >> 6);
-        OPERATOR_CONTROLLER_CASE(75, 0, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
+        //OPERATOR_CONTROLLER_CASE(86, 0, setAttackRate, attackRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(87, 0, setDecayRate, decayRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(88, 0, setSustainLevel, sustainLevel, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(89, 0, setReleaseRate, releaseRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(90, 0, setKeyScaleLevel, keyScaleLevel, value >> 5);   // FIXME: need to swap 1 and 2 around
+        //OPERATOR_CONTROLLER_CASE(80, 0, setEnvelopeScaling, envelopeScaling, value >> 6);
+        //OPERATOR_CONTROLLER_CASE(75, 0, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
         //OPERATOR_CONTROLLER_CASE(66, 0, setSustain, sustain, value >> 6);
         CHANNEL_CONTROLLER_CASE(79, setFeedbackModulationFactor, feedbackModulationFactor, value >> 4);
         case 14:
@@ -404,14 +392,16 @@ void MIDIControl::setController(
         }
 
         // Operator 2
-        OPERATOR_CONTROLLER_CASE(19, 1, setWaveform, waveform, value >> 4);
+        //OPERATOR_CONTROLLER_CASE(19, 1, setWaveform, waveform, value >> 4);
         //OPERATOR_CONTROLLER_CASE(24, 1, setTremolo, tremolo, value >> 6);
         case 24:
-            m_channelData[channel].operatorData[1].tremolo = value >> 6;
+            //m_channelData[channel].operatorData[1].tremolo = value >> 6;
+            setTremolo(channel, 1, value >> 6);
             break;
         //OPERATOR_CONTROLLER_CASE(29, 1, setVibrato, vibrato, value >> 6);
         case 29:
-            m_channelData[channel].operatorData[1].vibrato = value >> 6;
+            //m_channelData[channel].operatorData[1].vibrato = value >> 6;
+            setVibrato(channel, 1, value >> 6);
             break;
 //                OPERATOR_CONTROLLER_CASE(102, 1, setAttenuation, attenuation, 63 - (value >> 1));
         case 102:
@@ -420,13 +410,13 @@ void MIDIControl::setController(
             updateAttenuation(channel);
             break;
         }
-        OPERATOR_CONTROLLER_CASE(103, 1, setAttackRate, attackRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(104, 1, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(105, 1, setSustainLevel, sustainLevel, 15 -(value >> 3));
-        OPERATOR_CONTROLLER_CASE(106, 1, setReleaseRate, releaseRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(107, 1, setKeyScaleLevel, keyScaleLevel, value >> 5);
-        OPERATOR_CONTROLLER_CASE(81, 1, setEnvelopeScaling, envelopeScaling, value >> 6);
-        OPERATOR_CONTROLLER_CASE(76, 1, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
+        //OPERATOR_CONTROLLER_CASE(103, 1, setAttackRate, attackRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(104, 1, setDecayRate, decayRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(105, 1, setSustainLevel, sustainLevel, 15 -(value >> 3));
+        //OPERATOR_CONTROLLER_CASE(106, 1, setReleaseRate, releaseRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(107, 1, setKeyScaleLevel, keyScaleLevel, value >> 5);
+        //OPERATOR_CONTROLLER_CASE(81, 1, setEnvelopeScaling, envelopeScaling, value >> 6);
+        //OPERATOR_CONTROLLER_CASE(76, 1, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
         //OPERATOR_CONTROLLER_CASE(67, 1, setSustain, sustain, value >> 6);
         case 15:
         {
@@ -434,15 +424,18 @@ void MIDIControl::setController(
             updateAttenuation(channel);
             break;
         }
+
         // Operator 3
-        OPERATOR_CONTROLLER_CASE(20, 2, setWaveform, waveform, value >> 4);
+        //OPERATOR_CONTROLLER_CASE(20, 2, setWaveform, waveform, value >> 4);
         //OPERATOR_CONTROLLER_CASE(25, 2, setTremolo, tremolo, value >> 6);
         case 25:
-            m_channelData[channel].operatorData[2].tremolo = value >> 6;
+            //m_channelData[channel].operatorData[2].tremolo = value >> 6;
+            setTremolo(channel, 2, value >> 6);
             break;
         //OPERATOR_CONTROLLER_CASE(30, 2, setVibrato, vibrato, value >> 6);
         case 30:
-            m_channelData[channel].operatorData[2].vibrato = value >> 6;
+            //m_channelData[channel].operatorData[2].vibrato = value >> 6;
+            setVibrato(channel, 2, value >> 6);
             break;
         //OPERATOR_CONTROLLER_CASE(108, 2, setAttenuation, attenuation, 63 - (value >> 1));
         case 108:
@@ -451,13 +444,13 @@ void MIDIControl::setController(
             updateAttenuation(channel);
             break;
         }
-        OPERATOR_CONTROLLER_CASE(109, 2, setAttackRate, attackRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(110, 2, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(111, 2, setSustainLevel, sustainLevel, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(112, 2, setReleaseRate, releaseRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(113, 2, setKeyScaleLevel, keyScaleLevel, value >> 5);
-        OPERATOR_CONTROLLER_CASE(82, 2, setEnvelopeScaling, envelopeScaling, value >> 6);
-        OPERATOR_CONTROLLER_CASE(77, 2, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
+        //OPERATOR_CONTROLLER_CASE(109, 2, setAttackRate, attackRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(110, 2, setDecayRate, decayRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(111, 2, setSustainLevel, sustainLevel, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(112, 2, setReleaseRate, releaseRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(113, 2, setKeyScaleLevel, keyScaleLevel, value >> 5);
+        //OPERATOR_CONTROLLER_CASE(82, 2, setEnvelopeScaling, envelopeScaling, value >> 6);
+        //OPERATOR_CONTROLLER_CASE(77, 2, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
         //OPERATOR_CONTROLLER_CASE(68, 2, setSustain, sustain, value >> 6);
         case 16:
         {
@@ -467,14 +460,16 @@ void MIDIControl::setController(
         }
 
         // Operator 4
-        OPERATOR_CONTROLLER_CASE(21, 3, setWaveform, waveform, value >> 4);
+        //OPERATOR_CONTROLLER_CASE(21, 3, setWaveform, waveform, value >> 4);
         //OPERATOR_CONTROLLER_CASE(26, 3, setTremolo, tremolo, value >> 6);
         case 26:
-            m_channelData[channel].operatorData[3].tremolo = value >> 6;
+            //m_channelData[channel].operatorData[3].tremolo = value >> 6;
+            setTremolo(channel, 3, value >> 6);
             break;
         //OPERATOR_CONTROLLER_CASE(31, 3, setVibrato, vibrato, value >> 6);
         case 31:
-            m_channelData[channel].operatorData[3].vibrato = value >> 6;
+            //m_channelData[channel].operatorData[3].vibrato = value >> 6;
+            setVibrato(channel, 3, value >> 6);
             break;
         //OPERATOR_CONTROLLER_CASE(114, 3, setAttenuation, attenuation, 63 - (value >> 1));
         case 114:
@@ -483,13 +478,13 @@ void MIDIControl::setController(
             updateAttenuation(channel);
             break;
         }
-        OPERATOR_CONTROLLER_CASE(115, 3, setAttackRate, attackRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(116, 3, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(117, 3, setSustainLevel, sustainLevel, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(118, 3, setReleaseRate, releaseRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(119, 3, setKeyScaleLevel, keyScaleLevel, value >> 5);
-        OPERATOR_CONTROLLER_CASE(83, 3, setEnvelopeScaling, envelopeScaling, value >> 6);
-        OPERATOR_CONTROLLER_CASE(78, 3, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
+        //OPERATOR_CONTROLLER_CASE(115, 3, setAttackRate, attackRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(116, 3, setDecayRate, decayRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(117, 3, setSustainLevel, sustainLevel, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(118, 3, setReleaseRate, releaseRate, 15 - (value >> 3));
+        //OPERATOR_CONTROLLER_CASE(119, 3, setKeyScaleLevel, keyScaleLevel, value >> 5);
+        //OPERATOR_CONTROLLER_CASE(83, 3, setEnvelopeScaling, envelopeScaling, value >> 6);
+        //OPERATOR_CONTROLLER_CASE(78, 3, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
         //OPERATOR_CONTROLLER_CASE(69, 3, setSustain, sustain, value >> 6);
         case 17:
         {
@@ -515,6 +510,9 @@ void MIDIControl::setPitchBend(
     uint8_t channel,
     uint16_t amount)
 {
+    if ((channel >= NUMBER_OF_MIDI_CHANNELS) || (amount > 0x7fff))
+        return;
+
     // This gives a range from -200 to +200
     int16_t cents = (((int32_t)amount - 8192) * 100) / (amount < 8192 ? 4096 : 4095);
     m_channelData[channel].pitchBend = cents;
@@ -551,7 +549,7 @@ void MIDIControl::service()
                 note.lfoTriggered = true;
                 //Serial.print(note.opl3Channel);
                 //Serial.println(" - enabling vibrato");
-                for (int op = 0; op < 4; ++ op) {
+                for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
                     if (m_channelData[note.midiChannel].operatorData[op].vibrato) {
                         m_opl3.setVibrato(note.opl3Channel, op, true);
                     }
@@ -619,7 +617,9 @@ void MIDIControl::service()
                 }
 
                 if (note.releaseDuration > expectedReleaseDuration) {
+                    silence(note);
                     //Serial.println("Release end");
+#if 0
                     for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
                         m_opl3.setAttenuation(note.opl3Channel, op, 63);
                     }
@@ -627,6 +627,7 @@ void MIDIControl::service()
                     m_opl3.freeChannel(note.opl3Channel);
                     note.clear();
                     -- m_numberOfPlayingNotes;
+#endif
                 }
             }
 
@@ -648,26 +649,51 @@ void MIDIControl::stopAllNotes(
 {
     uint8_t opl3Channel;
 
-    for (int noteSlot = 0; noteSlot < OPL3::NumberOfChannels; ++ noteSlot) {
-        opl3Channel = m_playingNotes[noteSlot].opl3Channel;
-        if ((channel == m_playingNotes[noteSlot].midiChannel) && (opl3Channel != UnusedOpl3Channel)) {
+    for (int i = 0; i < OPL3::NumberOfChannels; ++ i) {
+        NoteData &note = m_playingNotes[i];
+        if ((channel == note.midiChannel) && (note.opl3Channel != UnusedOpl3Channel)) {
+            silence(note);
+#if 0
             if (immediate) {
                 // Max attenuation and release rate for all operators
-                for (int op = 0; op < 4; ++ op) {
-                    m_opl3.setReleaseRate(opl3Channel, op, 15);
-                    m_opl3.setAttenuation(opl3Channel, op, 63);
+                for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
+                    m_opl3.setReleaseRate(note.opl3Channel, op, 15);
+                    m_opl3.setAttenuation(note.opl3Channel, op, 63);
                 }
-                m_playingNotes[noteSlot].clear();
+                m_opl3.setFrequency(note.opl3Channel, 0);
             } else {
-                m_playingNotes[noteSlot].releasing = true;
+                note.releasing = true;
             }
 
-            m_opl3.keyOff(opl3Channel);
-            //opl3.freeChannel(opl3Channel);
+            m_opl3.keyOff(note.opl3Channel);
+
+            if (immediate) {
+                m_opl3.freeChannel(note.opl3Channel);
+                note.clear();
+                -- m_numberOfPlayingNotes;
+            }
+#endif
         }
     }
+}
 
-    m_numberOfPlayingNotes = 0;
+void MIDIControl::silence(
+    NoteData &note)
+{
+    m_opl3.keyOff(note.opl3Channel);
+
+    // Max attenuation and release rate for all operators
+    for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
+        m_opl3.setReleaseRate(note.opl3Channel, op, 15);
+        m_opl3.setAttenuation(note.opl3Channel, op, 63);
+    }
+
+    // Sometimes the sound is still slightly audible without doing this
+    m_opl3.setFrequency(note.opl3Channel, 0);
+
+    m_opl3.freeChannel(note.opl3Channel);
+    note.clear();
+    -- m_numberOfPlayingNotes;
 }
 
 void MIDIControl::updateAttenuation(
@@ -683,21 +709,12 @@ void MIDIControl::updateAttenuation(
 
             velocityLevelRange = (velocityToLevel * operatorLevel) / 63;
             baseLevel = operatorLevel - velocityLevelRange;
-            level = ((note.velocity >> 1) * velocityLevelRange) / 63;
-
-            //Serial.print("op "); Serial.print(op);
-            //Serial.print(" velocityLevelRange:"); Serial.print(velocityLevelRange);
-            //Serial.print(" baseLevel:"); Serial.print(baseLevel);
-            level += baseLevel;
-            //Serial.print(" level:"); Serial.print(level);
+            level = baseLevel + (((note.velocity >> 1) * velocityLevelRange) / 63);
             
             // Scale level based on channel volume for carriers
             if (m_opl3.getOperatorType(note.opl3Channel, op) == OPL3::CarrierOperatorType) {
                 level = (level * m_channelData[channel].volume) / 63;
             }
-
-            //Serial.print(" -- final:");
-            //Serial.println(level);
 
             m_opl3.setAttenuation(note.opl3Channel, op, 63 - level);
         }

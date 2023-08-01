@@ -41,28 +41,6 @@ class MIDIControl {
         void service();
 
     private:
-        void stopAllNotes(
-            uint8_t channel,
-            bool immediate = false);
-
-        void updateAttenuation(
-            uint8_t channel);
-
-        void setTremolo(
-            uint8_t channel,
-            uint8_t operatorIndex,
-            bool enable);
-
-        void setVibrato(
-            uint8_t channel,
-            uint8_t operatorIndex,
-            bool enable);
-
-        enum {
-            NoNoteSlot = -1,
-            UnusedOpl3Channel = 31
-        };
-
         typedef struct __attribute__((packed)) NoteData {
             void clear()
             {
@@ -87,6 +65,31 @@ class MIDIControl {
             unsigned sustained      : 1;    // note off deferred from stopNote until sustain off
             unsigned releasing      : 1;
         } NoteData;
+
+        void stopAllNotes(
+            uint8_t channel,
+            bool immediate = false);
+
+        void silence(
+            NoteData &note);
+
+        void updateAttenuation(
+            uint8_t channel);
+
+        void setTremolo(
+            uint8_t channel,
+            uint8_t operatorIndex,
+            bool enable);
+
+        void setVibrato(
+            uint8_t channel,
+            uint8_t operatorIndex,
+            bool enable);
+
+        enum {
+            NoNoteSlot = -1,
+            UnusedOpl3Channel = 31
+        };
 
         OPL3::Hardware &m_opl3;
 
