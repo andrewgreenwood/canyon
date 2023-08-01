@@ -1,4 +1,8 @@
-#include <cstddef>
+#ifdef ARDUINO
+    #include <arduino.h>
+#else
+    #include <cstddef>
+#endif
 #include "MIDIControl.h"
 #include "freq.h"
 
@@ -18,6 +22,7 @@ MIDIControl::MIDIControl(OPL3::Hardware &opl3)
   m_numberOfPlayingNotes(0),
   m_previousMillis(millis())
 {
+    // Default patch
     for (int i = 0; i < NUMBER_OF_MIDI_CHANNELS; ++ i) {
         m_channelData[i].type = OPL3::Melody2OpChannelType;
         m_channelData[i].outputs = 0x3;
@@ -25,7 +30,7 @@ MIDIControl::MIDIControl(OPL3::Hardware &opl3)
 
         for (int op = 0; op < 4; ++ op) {
             m_channelData[i].operatorData[op].level = 48;
-            m_channelData[i].operatorData[op].attackRate = 14;
+            m_channelData[i].operatorData[op].attackRate = 11;
             m_channelData[i].operatorData[op].decayRate = 1;
             m_channelData[i].operatorData[op].sustainLevel = 5;
             m_channelData[i].operatorData[op].releaseRate = 7;
@@ -250,8 +255,21 @@ void MIDIControl::setController(
             } \
             break;
 
-    // Todo: ops 3/4, synth type and percussion mode, sustain
     switch (controller) {
+        // Global
+
+        case 22:
+        {
+            m_opl3.setTremoloDepth(value > 63);
+            break;
+        }
+
+        case 27:
+        {
+            m_opl3.setVibratoDepth(value > 63);
+            break;
+        }
+
         // General
 
         case 7:
@@ -371,9 +389,9 @@ void MIDIControl::setController(
         }
         OPERATOR_CONTROLLER_CASE(86, 0, setAttackRate, attackRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(87, 0, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(88, 0, setSustainLevel, sustainLevel, value >> 3);
+        OPERATOR_CONTROLLER_CASE(88, 0, setSustainLevel, sustainLevel, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(89, 0, setReleaseRate, releaseRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(90, 0, setKeyScaleLevel, keyScaleLevel, value >> 5);
+        OPERATOR_CONTROLLER_CASE(90, 0, setKeyScaleLevel, keyScaleLevel, value >> 5);   // FIXME: need to swap 1 and 2 around
         OPERATOR_CONTROLLER_CASE(80, 0, setEnvelopeScaling, envelopeScaling, value >> 6);
         OPERATOR_CONTROLLER_CASE(75, 0, setFrequencyMultiplicationFactor, frequencyMultiplicationFactor, value >> 3);
         //OPERATOR_CONTROLLER_CASE(66, 0, setSustain, sustain, value >> 6);
@@ -404,7 +422,7 @@ void MIDIControl::setController(
         }
         OPERATOR_CONTROLLER_CASE(103, 1, setAttackRate, attackRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(104, 1, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(105, 1, setSustainLevel, sustainLevel, value >> 3);
+        OPERATOR_CONTROLLER_CASE(105, 1, setSustainLevel, sustainLevel, 15 -(value >> 3));
         OPERATOR_CONTROLLER_CASE(106, 1, setReleaseRate, releaseRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(107, 1, setKeyScaleLevel, keyScaleLevel, value >> 5);
         OPERATOR_CONTROLLER_CASE(81, 1, setEnvelopeScaling, envelopeScaling, value >> 6);
@@ -435,7 +453,7 @@ void MIDIControl::setController(
         }
         OPERATOR_CONTROLLER_CASE(109, 2, setAttackRate, attackRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(110, 2, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(111, 2, setSustainLevel, sustainLevel, value >> 3);
+        OPERATOR_CONTROLLER_CASE(111, 2, setSustainLevel, sustainLevel, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(112, 2, setReleaseRate, releaseRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(113, 2, setKeyScaleLevel, keyScaleLevel, value >> 5);
         OPERATOR_CONTROLLER_CASE(82, 2, setEnvelopeScaling, envelopeScaling, value >> 6);
@@ -467,7 +485,7 @@ void MIDIControl::setController(
         }
         OPERATOR_CONTROLLER_CASE(115, 3, setAttackRate, attackRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(116, 3, setDecayRate, decayRate, 15 - (value >> 3));
-        OPERATOR_CONTROLLER_CASE(117, 3, setSustainLevel, sustainLevel, value >> 3);
+        OPERATOR_CONTROLLER_CASE(117, 3, setSustainLevel, sustainLevel, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(118, 3, setReleaseRate, releaseRate, 15 - (value >> 3));
         OPERATOR_CONTROLLER_CASE(119, 3, setKeyScaleLevel, keyScaleLevel, value >> 5);
         OPERATOR_CONTROLLER_CASE(83, 3, setEnvelopeScaling, envelopeScaling, value >> 6);
@@ -475,7 +493,7 @@ void MIDIControl::setController(
         //OPERATOR_CONTROLLER_CASE(69, 3, setSustain, sustain, value >> 6);
         case 17:
         {
-            m_channelData[channel].operatorData[0].velocityToLevel = value >> 1;
+            m_channelData[channel].operatorData[3].velocityToLevel = value >> 1;
             updateAttenuation(channel);
             break;
         }

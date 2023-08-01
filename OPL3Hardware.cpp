@@ -7,9 +7,9 @@
 */
 
 #ifdef ARDUINO
-#include <arduino.h>
+    #include <arduino.h>
 #else
-#include <cstdio>
+    #include <cstdio>
 #endif
 
 #include "OPL3Hardware.h"
@@ -1031,14 +1031,14 @@ bool Hardware::commitGlobalData(
     GlobalRegister reg) const
 {
     if (reg == GlobalRegisterF) {
-        return writeGlobalRegister(GlobalRegisterF,
-                               0x20 | (m_kickKeyOn << 4)
-                                    | (m_snareKeyOn << 3)
-                                    | (m_tomTomKeyOn << 2)
-                                    | (m_cymbalKeyOn << 1)
-                                    | (m_hiHatKeyOn)
-                                    | (m_tremoloDepth << 7)
-                                    | (m_vibratoDepth << 6));
+        return writeGlobalRegister(GlobalRegisterF, (m_percussionMode << 5)
+                                                  | (m_kickKeyOn << 4)
+                                                  | (m_snareKeyOn << 3)
+                                                  | (m_tomTomKeyOn << 2)
+                                                  | (m_cymbalKeyOn << 1)
+                                                  | (m_hiHatKeyOn)
+                                                  | (m_tremoloDepth << 7)
+                                                  | (m_vibratoDepth << 6));
     } else {
         return false;
     }

@@ -7,7 +7,7 @@ CC#     Parameter
 4   X   Foot pedal (MSB)
 5   X   Portamento time (MSB)
 6   X   Data entry (MSB)
-7   -   Volume (MSB) (affect the sound generating operators) - TODO
+7   -   Volume (MSB) (affect the sound generating operators)
 8   X   Balance (MSB)
 9   O   Synthesis type (6 types, 0-22, increments of 21, 105-127 ?), perc? - TODO
 10  O   Pan (MSB) (0-42 left, 43-85 middle, 86-127 right)
@@ -22,12 +22,12 @@ CC#     Parameter
 19  O   Op 2 waveform select
 20  O   Op 3 waveform select
 21  O   Op 4 waveform select
-22  -   Tremolo depth (global) - TODO
+22  -   Tremolo depth (global)
 23  O   Op 1 tremolo on
 24  O   Op 2 tremolo on
 25  O   Op 3 tremolo on
 26  O   Op 4 tremolo on
-27  -   Vibrato depth (global) - TODO
+27  -   Vibrato depth (global)
 28  O   Op 1 vibrato on
 29  O   Op 2 vibrato on
 30  O   Op 3 vibrato on
@@ -66,12 +66,12 @@ CC#     Parameter
 62  X   - (LSB)
 63  X   - (LSB)
 
-64  -   Sustain (on/off) - TODO
+64  -   Sustain (on/off)
 65  -   Portamento (on/off)
-66  -   Op 1 sustain on     - TODO: disable these and set this permanently on
-67  -   Op 2 sustain on
-68  -   Op 3 sustain on
-69  -   Op 4 sustain on
+66  -   
+67  -   
+68  -   
+69  -   
 70  X   Sound controller 1 (sound variation)
 71  X   Sound controller 2 (VCF resonance)
 72  X   Sound controller 3 (VCA release time)
@@ -94,7 +94,7 @@ CC#     Parameter
 89  O   Op 1 release (0-15)
 90  O   Op 1 KSL (0-3)
 91  X   Effect 1 depth (reverb)
-92  X   Effect 2 depth (tremolo) - TODO?
+92  X   Effect 2 depth (tremolo)
 93  X   Effect 3 depth (chorus)
 94  X   Effect 4 depth (detune)
 95  X   Effect 5 depth (phaser)
@@ -134,7 +134,4 @@ CC#     Parameter
 
 
 TODO:
-- Vibrato depth (global)
-- Tremolo depth (global)
-- Velocity-to-level (operator)
 - LFO start delay (channel)
