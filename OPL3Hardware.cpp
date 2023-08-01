@@ -67,14 +67,8 @@ Hardware::Hardware(
   m_numberOfFree2OpChannels(0),
   m_numberOfFree4OpChannels(0)
 {
-    //uint8_t i;
-
-    // TODO - init parameters
-    //memset(m_operatorParameters, 0, sizeof(m_operatorParameters));
-
-    //for (i = 0; i < 36; ++ i) {
-        //m_operatorParameters
-    //}
+    // Initialisation of channel/operator parameters is deferred
+    // until init() is called
 }
 
 bool Hardware::detect() const
@@ -193,10 +187,6 @@ void Hardware::init()
         commitOperatorData(i, OperatorRegisterD);
         commitOperatorData(i, OperatorRegisterE);
     }
-
-//    for (i = 0; i < m_numberOfFreeChannels; ++ i) {
-//        m_channelParameters[m_freeChannels[i]].type = m_channelType;
-//    }
 }
 
 bool Hardware::enablePercussion()
@@ -213,15 +203,6 @@ bool Hardware::enablePercussion()
             return false;
         }
     }
-
-    // Only need to write the register when doing a key-on, otherwise we
-    // can't set operator values
-#if 0
-    // Enable percussion mode
-    if (!writeGlobalRegister(GlobalRegisterF, 0x20)) {
-        return false;
-    }
-#endif
 
     m_percussionMode = true;
 
@@ -250,12 +231,6 @@ bool Hardware::disablePercussion()
         return false;
     }
 
-#if 0
-    if (!writeGlobalRegister(GlobalRegisterF, 0x00)) {
-        return false;
-    }
-#endif
-
     m_percussionMode = false;
 
     // TODO: Use new channel add/remove
@@ -266,25 +241,6 @@ bool Hardware::disablePercussion()
 
     return !m_percussionMode;
 }
-
-// Temporary hack to switch globally between 2-op and 4-op melody channel setups
-#if 0
-bool Hardware::setChannelType(
-    ChannelType type)
-{
-    return false;
-    #if 0
-    unsigned int maxOperator;
-
-    if (m_channelType == type)
-        return true;
-
-    m_channelType = type;
-    init();
-    return true;
-    #endif
-}
-#endif
 
 uint8_t Hardware::allocateChannel(
     ChannelType type)
@@ -405,21 +361,6 @@ uint8_t Hardware::allocateChannel(
             return InvalidChannel;
     };
 
-#if 0
-    if (m_numberOfFreeChannels == 0)
-        return InvalidChannel;
-
-    // Take the first channel
-    channel = m_freeChannels[0];
-    -- m_numberOfFreeChannels;
-
-    // Shift the rest of the channels along by 1 slot
-    for (int i = 0; i < m_numberOfFreeChannels; ++ i) {
-        m_freeChannels[i] = m_freeChannels[i + 1];
-    }
-
-#endif
-
     if (channel != InvalidChannel) {
         m_allocatedChannelBitmap |= 1L << channel;
     }
@@ -450,12 +391,10 @@ bool Hardware::freeChannel(
     switch (channel_type) {
         case Melody2OpChannelType:
             addFreeChannel(m_free2OpChannels, m_numberOfFree2OpChannels, channel);
-            //m_free2OpChannels[m_numberOfFree2OpChannels ++] = channel;
             break;
 
         case Melody4OpChannelType:
             addFreeChannel(m_free4OpChannels, m_numberOfFree4OpChannels, channel);
-            //m_free4OpChannels[m_numberOfFree4OpChannels ++] = channel;
             break;
     };
 
@@ -527,14 +466,6 @@ bool Hardware::setFrequency(
 
     block = getFrequencyBlock(frequency);
     fnum = getFrequencyFnum(frequency, block);
-
-#if 0
-    Serial.print("block ");
-    Serial.print(block);
-    Serial.print(" fnum ");
-    Serial.print(fnum);
-    Serial.println("");
-#endif
 
     if (isPhysicalChannel(channel)) {
         realChannel = channel;
@@ -989,94 +920,6 @@ bool Hardware::isAllocatedChannel(
             (1L << channel & m_allocatedChannelBitmap));
 }
 
-// This used to be called by allocateChannel but isn't currently used
-uint8_t Hardware::findAvailableChannel(
-    ChannelType type) const
-{
-#if 0
-    const uint8_t *channelPriorities;
-    int8_t i;
-#endif
-    uint8_t channel;
-
-    switch (type) {
-        case NullChannelType:
-            return InvalidChannel;
-
-        case Melody2OpChannelType:
-#if 0
-            channelPriorities = melody2OpChannelPriority;
-#endif
-            break;
-
-        case Melody4OpChannelType:
-#if 0
-            channelPriorities = melody4OpChannelPriority;
-#endif
-            break;
-
-        case KickChannelType:
-            if ((m_percussionMode) && (!isAllocatedChannel(KickChannel))) {
-                return KickChannel;
-            }
-            return InvalidChannel;
-
-        case SnareChannelType:
-            if ((m_percussionMode) && (!isAllocatedChannel(SnareChannel))) {
-                return SnareChannel;
-            }
-            return InvalidChannel;
-
-        case TomTomChannelType:
-            if ((m_percussionMode) && (!isAllocatedChannel(TomTomChannel))) {
-                return TomTomChannel;
-            }
-            return InvalidChannel;
-
-        case CymbalChannelType:
-            if ((m_percussionMode) && (!isAllocatedChannel(CymbalChannel))) {
-                return CymbalChannel;
-            }
-            return InvalidChannel;
-
-        case HiHatChannelType:
-            if ((m_percussionMode) && (!isAllocatedChannel(HiHatChannel))) {
-                return HiHatChannel;
-            }
-            return InvalidChannel;
-
-        default:
-            return InvalidChannel;
-#if 0
-            channelPriorities = (uint8_t *)0;
-            break;
-#endif
-    };
-
-#if 0
-    if (!channelPriorities) {
-        return InvalidChannel;
-    }
-
-    for (i = 0; channelPriorities[i] != InvalidChannel; ++ i) {
-        channel = channelPriorities[i];
-
-        // Skip percussion channels if they are being used
-        if ((channel >= 6) && (channel <= 8)) {
-            if (m_percussionMode) {
-                continue;
-            }
-        }
-
-        if ((!isAllocatedChannel(channel)) && (getChannelType(channel) == type)) {
-            return channel;
-        }
-    }
-#endif
-
-    return InvalidChannel;
-}
-
 uint8_t Hardware::shiftFreeChannel(
     uint8_t *list,
     uint8_t &freeCount)
@@ -1325,15 +1168,6 @@ void Hardware::writeData(
     } else {
         address = m_ioBaseAddress + 2;
     }
-
-#if 0
-    Serial.print(address, HEX);
-    Serial.print(": ");
-    Serial.print(reg, HEX);
-    Serial.print(" ");
-    Serial.print(data, HEX);
-    Serial.println("");
-#endif
 
     m_isaBus.write(address, reg);
     m_isaBus.write(address + 1, data);

@@ -123,10 +123,6 @@ class Hardware {
 
         bool disablePercussion();
 
-        // Changing this will immediately free all allocated channels
-        //bool setChannelType(
-        //    ChannelType type);
-
         uint8_t allocateChannel(
             ChannelType type);
 
@@ -246,9 +242,6 @@ class Hardware {
 
         bool isAllocatedChannel(
             uint8_t channel) const;
-
-        uint8_t findAvailableChannel(
-            ChannelType type) const;
 
         uint8_t shiftFreeChannel(
             uint8_t *list,
