@@ -1,3 +1,11 @@
+/*
+    Project:    Canyon
+    Purpose:    MIDI control of OPL3 channels/operators
+    Author:     Andrew Greenwood
+    License:    See license.txt
+    Date:       July 2023
+*/
+
 #ifndef CANYON_MIDICONTROL_H
 #define CANYON_MIDICONTROL_H 1
 
@@ -7,14 +15,6 @@
 #define NUMBER_OF_MIDI_CHANNELS 4
 
 class MIDIControl {
-    #define FOR_EACH_PLAYING_NOTE(channel, slot, code) \
-        for (int slot##index = 0; slot##index < OPL3::NumberOfChannels; ++ slot##index) { \
-            NoteData &slot = m_playingNotes[slot##index]; \
-            if ((channel == slot.midiChannel) && (slot.opl3Channel != UnusedOpl3Channel)) { \
-                code; \
-            } \
-        }
-
     public:
         MIDIControl(OPL3::Hardware &opl3);
         
