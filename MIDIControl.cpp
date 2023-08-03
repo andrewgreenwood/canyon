@@ -78,7 +78,6 @@ void MIDIControl::playNote(
 {
     uint8_t opl3Channel = UnusedOpl3Channel;
     NoteData *noteData = NULL;
-    //int noteSlot = NoNoteSlot;
 
     if ((channel >= NUMBER_OF_MIDI_CHANNELS) || (note > 0x7f) || (velocity > 0x7f)) {
         return;
@@ -91,7 +90,6 @@ void MIDIControl::playNote(
         }
     }
 
-    //if (noteSlot == NoNoteSlot) {
     if (!noteData)
         return;
 
@@ -140,6 +138,10 @@ void MIDIControl::playNote(
         m_opl3.setTremolo(opl3Channel, op, false);
         m_opl3.setVibrato(opl3Channel, op, false);
 
+        // This doesn't seem useful to turn off and can probably be achieved
+        // with lowest sustain level anyway
+        m_opl3.setSustain(opl3Channel, op, true);
+
         SET_OPERATOR_DATA(setAttackRate, attackRate);
         SET_OPERATOR_DATA(setDecayRate, decayRate);
         SET_OPERATOR_DATA(setSustainLevel, sustainLevel);
@@ -147,8 +149,6 @@ void MIDIControl::playNote(
         SET_OPERATOR_DATA(setKeyScaleLevel, keyScaleLevel);
         SET_OPERATOR_DATA(setEnvelopeScaling, envelopeScaling);
         SET_OPERATOR_DATA(setFrequencyMultiplicationFactor, frequencyMultiplicationFactor);
-        //SET_OPERATOR_DATA(setSustain, sustain);
-        m_opl3.setSustain(opl3Channel, op, true);
 
         #undef SET_OPERATOR_DATA
     }
