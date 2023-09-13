@@ -32,7 +32,7 @@ const uint8_t  mpu401IRQ            = 5;
 const uint16_t opl3IoBaseAddress    = 0x388;
 
 const uint8_t mpu401IntPin = 2;
-const uint8_t isaSlaveSelectPin = 3;
+const uint8_t readyPin = 4;
 const uint8_t isaReadPin = 5;
 const uint8_t isaLoadPin = 6;
 const uint8_t isaLatchPin = 7;
@@ -46,8 +46,8 @@ const uint8_t isaClockPin = 13;
 int diagnosticLedBrightness = 0;
 int diagnosticLedFrame = 0;
 
-ISABus isaBus(isaOutputPin, isaInputPin, isaSlaveSelectPin, isaClockPin,
-              isaLatchPin, isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
+ISABus isaBus(isaOutputPin, isaInputPin, isaClockPin, isaLatchPin,
+              isaLoadPin, isaWritePin, isaReadPin, isaResetPin);
 
 OPL3SA opl3sa(isaBus);
 MPU401 mpu401(isaBus);
@@ -56,6 +56,54 @@ OPL3::Hardware opl3(isaBus, opl3IoBaseAddress);
 MIDIBuffer midiBuffer;
 
 /*
+    Handle MIDI input through the serial pin
+*/
+
+void processSerialInput()
+{
+    uint8_t data;
+    uint16_t expectedLength;
+    static uint8_t length = 0;
+
+    static struct MIDIMessage message = {
+        0, {0, 0}
+    };
+
+    while (Serial.available()) {
+        data = Serial.read();
+
+        if (data & 0x80) {
+            // Status byte
+            message.status = data;
+            length = 1;
+        } else if (message.status == 0) {
+            // Unknown status - skip
+            continue;
+        } else {
+            // Data byte
+            message.data[length - 1] = data;
+
+            ++ length;
+        }
+
+        expectedLength = getExpectedMidiMessageLength(message.status);
+
+        if (expectedLength == 0) {
+            // Not a supported message - ignore it and wait for the next
+            // status byte
+            message.status = 0;
+            length = 0;
+        } else if (length == expectedLength) {
+            midiBuffer.put(message);
+
+            // Keep the status byte for the next message
+            length = 1;
+        }
+    }
+}
+
+/*
+    Joystick/MIDI port handling
     IRQ 5 is raised whenever MIDI data is ready on the MPU-401 UART port. This
     routine just buffers the incoming data.
 */
@@ -134,11 +182,18 @@ MIDIControl midiControl(opl3);
 
 void setup()
 {
+    long startTime = millis();
+
+    // This LED will stay on during initialisation
     pinMode(diagnosticLedPin, OUTPUT);
     digitalWrite(diagnosticLedPin, HIGH);
 
+    // The controller board uses this to determine when startup has completed
+    pinMode(readyPin, OUTPUT);
+    digitalWrite(readyPin, LOW);
+
 #ifdef WITH_SERIAL
-    Serial.begin(9600);
+    Serial.begin(31250);
     Serial.println("Canyon\n------");
 #endif
 
@@ -195,10 +250,15 @@ void setup()
     midiControl.init();
 
 #ifdef WITH_SERIAL
+    Serial.println(millis() - startTime);
     Serial.println("\nReady!\n");
 #endif
 
+    // Visual indication that startup has completed
     digitalWrite(diagnosticLedPin, LOW);
+
+    // Signal to the controller board that we're ready for input
+    digitalWrite(readyPin, HIGH);
 }
 
 void printMidiMessage(
@@ -226,6 +286,10 @@ void serviceMidiInput()
     int noteSlot = -1;
     uint8_t opl3Channel = OPL3::InvalidChannel;
 
+    // Handle MIDI input through serial RX pin
+    processSerialInput();
+
+    // Handle MIDI input through joystick/MIDI port
     #ifndef USE_MPU401_INTERRUPTS
     if (mpu401.canRead()) {
         receiveMpu401Data();
@@ -263,7 +327,8 @@ void serviceMidiInput()
 
 void loop()
 {
-    #if 0
+    // This causes some output interference
+    #if 1
     if (diagnosticLedBrightness > 0) {
         if (++ diagnosticLedFrame > 100) {
             analogWrite(diagnosticLedPin, -- diagnosticLedBrightness);

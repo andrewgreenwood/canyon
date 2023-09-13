@@ -14,9 +14,6 @@
 #include "MIDIControl.h"
 #include "freq.h"
 
-// TODO: Increase this to 16 eventually
-#define NUMBER_OF_MIDI_CHANNELS 4
-
 #define FOR_EACH_PLAYING_NOTE(channel, slot, code) \
     for (int slot##index = 0; slot##index < OPL3::NumberOfChannels; ++ slot##index) { \
         NoteData &slot = m_playingNotes[slot##index]; \
@@ -52,7 +49,7 @@ MIDIControl::MIDIControl(OPL3::Hardware &opl3)
         }
 
         m_channelData[i].volume = 63;
-        m_channelData[i].lfoStartDelay = 5;     // TODO: Make adjustable
+        m_channelData[i].lfoStartDelay = 0;
         m_channelData[i].pitchBend = 0;
         m_channelData[i].sustaining = false;
     }
@@ -109,7 +106,6 @@ void MIDIControl::playNote(
     }
 
     if (opl3Channel == OPL3::InvalidChannel) {
-//        Serial.println("Cannot allocate OPL3 channel");
         return;
     }
 
@@ -185,7 +181,6 @@ void MIDIControl::stopNote(
 
             opl3Channel = noteData->opl3Channel;
             if (opl3Channel == UnusedOpl3Channel) {
-//                Serial.println("Invalid OPL3 channel");
                 return;
             }
 
@@ -210,16 +205,6 @@ void MIDIControl::setController(
     if ((channel >= NUMBER_OF_MIDI_CHANNELS) || (controller > 0x7f) || (value > 0x7f)) {
         return;
     }
-
-#if 0
-    Serial.print("MIDI channel ");
-    Serial.print(channel);
-    Serial.print(" controller ");
-    Serial.print(controller);
-    Serial.print(" value ");
-    Serial.print(value);
-    Serial.println("");
-#endif
 
     #define CHANNEL_CONTROLLER_CASE(controller, method, member, value) \
         case controller: \
@@ -314,25 +299,21 @@ void MIDIControl::setController(
             if (m_channelData[channel].type != newChannelType) {
                 stopAllNotes(channel, true);
                 m_channelData[channel].type = newChannelType;
+                // TODO: If switching to 4-op, re-send control values for ops
+                // 3 and 4 because any changes in 2-op mode for those would've
+                // been ignored
             }
 
             break;
         }
 
-        case 120:   // All sound off
-            stopAllNotes(channel, true);
-            break;
-
-        case 121:   // Reset controllers to default values
-            // TODO
-            break;
-
-        case 123:   // All notes off
-            stopAllNotes(channel, false);
-            break;
-
+        // Panning
         CHANNEL_CONTROLLER_CASE(10, setOutput, outputs, (value < 43 ? 0x2 : (value > 85 ? 0x1 : 0x3)));
-        
+
+        case 12:    // LFO start delay
+            m_channelData[channel].lfoStartDelay = value >> 3;
+            break;
+
         case 64:    // Sustain pedal
         {
             bool doSustain = value > 63;
@@ -348,6 +329,18 @@ void MIDIControl::setController(
             }
             break;
         }
+
+        case 120:   // All sound off
+            stopAllNotes(channel, true);
+            break;
+
+        case 121:   // Reset controllers to default values
+            // TODO
+            break;
+
+        case 123:   // All notes off
+            stopAllNotes(channel, false);
+            break;
 
         // Basic operator controls
 
@@ -471,11 +464,6 @@ void MIDIControl::setController(
         }
 
         default:
-#if 0
-            Serial.print("Unknown controller ");
-            Serial.print(controller);
-            Serial.println("");
-#endif
             break;
     };
 
@@ -552,8 +540,7 @@ void MIDIControl::service()
                         case 0:
                             // Indefinite - keep resetting the duration
                             // The note will only silence when the note slot is re-used due
-                            // to no others being available
-                            // This doesn't seem useful - TODO: Don't support this value?
+                            // to no others being available (this doesn't seem useful)
                             note.releaseDuration = 0;
                             break;
                         case 1:
@@ -595,27 +582,8 @@ void MIDIControl::service()
 
                 if (note.releaseDuration > expectedReleaseDuration) {
                     silence(note);
-                    //Serial.println("Release end");
-#if 0
-                    for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
-                        m_opl3.setAttenuation(note.opl3Channel, op, 63);
-                    }
-                    m_opl3.setFrequency(note.opl3Channel, 0);
-                    m_opl3.freeChannel(note.opl3Channel);
-                    note.clear();
-                    -- m_numberOfPlayingNotes;
-#endif
                 }
             }
-
-#if 0
-            if ((newDuration == 32767) || (newDuration % 500 == 0)) {
-                Serial.print(noteSlot);
-                Serial.print(" --> ");
-                Serial.print(newDuration);
-                Serial.println("");
-            }
-#endif
         }
     }
 }
@@ -630,26 +598,6 @@ void MIDIControl::stopAllNotes(
         NoteData &note = m_playingNotes[i];
         if ((channel == note.midiChannel) && (note.opl3Channel != UnusedOpl3Channel)) {
             silence(note);
-#if 0
-            if (immediate) {
-                // Max attenuation and release rate for all operators
-                for (int op = 0; op < m_opl3.getOperatorCount(note.opl3Channel); ++ op) {
-                    m_opl3.setReleaseRate(note.opl3Channel, op, 15);
-                    m_opl3.setAttenuation(note.opl3Channel, op, 63);
-                }
-                m_opl3.setFrequency(note.opl3Channel, 0);
-            } else {
-                note.releasing = true;
-            }
-
-            m_opl3.keyOff(note.opl3Channel);
-
-            if (immediate) {
-                m_opl3.freeChannel(note.opl3Channel);
-                note.clear();
-                -- m_numberOfPlayingNotes;
-            }
-#endif
         }
     }
 }
@@ -711,7 +659,7 @@ void MIDIControl::setTremolo(
         lfoStartDelay *= 150;
 
         FOR_EACH_PLAYING_NOTE(channel, note,
-            if ((note.duration > lfoStartDelay) && (!note.lfoTriggered)) {
+            if (note.duration > lfoStartDelay) {
                 note.lfoTriggered = true;
                 if (operatorIndex < m_opl3.getOperatorCount(note.opl3Channel)) {
                     m_opl3.setTremolo(note.opl3Channel, operatorIndex, true);
@@ -741,7 +689,7 @@ void MIDIControl::setVibrato(
         lfoStartDelay *= 150;
 
         FOR_EACH_PLAYING_NOTE(channel, note,
-            if ((note.duration > lfoStartDelay) && (!note.lfoTriggered)) {
+            if (note.duration > lfoStartDelay) {
                 note.lfoTriggered = true;
                 if (operatorIndex < m_opl3.getOperatorCount(note.opl3Channel)) {
                     m_opl3.setVibrato(note.opl3Channel, operatorIndex, true);

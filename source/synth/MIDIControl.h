@@ -11,8 +11,7 @@
 
 #include "OPL3Hardware.h"
 
-// TODO: Increase this to 16 eventually
-#define NUMBER_OF_MIDI_CHANNELS 4
+#define NUMBER_OF_MIDI_CHANNELS 16
 
 class MIDIControl {
     public:

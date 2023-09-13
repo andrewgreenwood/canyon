@@ -2,18 +2,21 @@ Arduino/ATmega328 Pin Map
 
 These pins are used by the "Canyon" ISA sound card interface project.
 
+
+SYNTH
+
 Arduino  Port/Pin  IC Pin  Purpose
-0 / RX   D0        2       UART RX (optional)
-1 / TX   D1        3       UART TX (optional)
-2        D2        4       Interrupt (MPU-401 UART)
-3        D3        5       SPI Slave Select (ISA Bus)
-4        D4        6       -
+0 / RX   D0        2       MIDI input
+1 / TX   D1        3       Serial TX (unused)
+2        D2        4       Interrupt (MPU-401)
+3        D3        5       -
+4        D4        6       Ready signal (HIGH after startup)
 5        D5        11      ISA Read (~IOR)
 6        D6        12      Load/Shift Mode (universal shift register)
 7        D7        13      Latch (595 RCLK)
 8        B0        14      ISA Reset (~RESET)
 9        B1        15      ISA Write (~IOW)
-10       B2        16      - (Reserved for Slave Select)
+10       B2        16      Diagnostic LED
 11       B3        17      SPI MOSI (Out to ISA Bus)
 12       B4        18      SPI MISO (In from ISA Bus)
 13       B5        19      SPI Clock
@@ -22,4 +25,29 @@ A1       C1        24      -
 A2       C2        25      -
 A3       C3        26      -
 A4       C4        27      -
+A5       C5        28      -
+
+
+CONTROLLER
+
+Arduino  Port/Pin  IC Pin  Purpose
+0 / RX   D0        2       MIDI input
+1 / TX   D1        3       MIDI output
+2        D2        4       "Load" key
+3        D3        5       Mux 3 (switches) signal
+4        D4        6       Mux 4 (keys) signal
+5        D5        11      Mux address S3
+6        D6        12      Mux address S2
+7        D7        13      Mux address S1
+8        B0        14      Mux address S0
+9        B1        15      Shift register SRCLK
+10       B2        16      Shift register RCLK
+11       B3        17      Shift register SER
+12       B4        18      "Save" key
+13       B5        19      Ready signal from synth
+A0       C0        23      Mux 1 (pots) signal
+A1       C1        24      Mux 2 (pots) signal
+A2       C2        25      Synth type knob
+A3       C3        26      LFO start pot
+A4       C4        27      Operator 1 feedback pot
 A5       C5        28      -

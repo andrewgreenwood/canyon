@@ -30,7 +30,6 @@
 ISABus::ISABus(
     uint8_t outputPin,
     uint8_t inputPin,
-    uint8_t slaveSelectPin,
     uint8_t clockPin,
     uint8_t latchPin,
     uint8_t loadPin,
@@ -38,8 +37,8 @@ ISABus::ISABus(
     uint8_t ioReadPin,
     uint8_t resetPin)
 : m_outputPin(outputPin), m_inputPin(inputPin),
-  m_slaveSelectPin(slaveSelectPin), m_clockPin(clockPin),
-  m_latchPin(latchPin), m_loadPin(loadPin), m_ioWritePin(ioWritePin),
+  m_clockPin(clockPin), m_latchPin(latchPin),
+  m_loadPin(loadPin), m_ioWritePin(ioWritePin),
   m_ioReadPin(ioReadPin), m_resetPin(resetPin)
 {
 }
@@ -51,11 +50,6 @@ void ISABus::reset() const
     // This needs to be set as output or the microcontroller will be unable
     // to determine whether it is acting as an SPI slave or not
     pinMode(10, OUTPUT);
-
-    // SPI slave select for the ISA bus (TODO: don't use fixed pin)
-    // This seems broken at the moment (just connect ~OE to GND instead)
-    pinMode(m_slaveSelectPin, OUTPUT);
-    digitalWrite(m_slaveSelectPin, LOW);
 
     // Raise IOW and IOR on the ISA bus
     pinMode(m_ioWritePin, OUTPUT);
@@ -92,8 +86,6 @@ void ISABus::write(
     if (!inISR()) {
         //noInterrupts();
     }
-
-    digitalWrite(m_slaveSelectPin, LOW);
 
     // Put the data shift register into 'shift' mode
     digitalWrite(m_loadPin, LOW);
@@ -138,7 +130,6 @@ void ISABus::write(
 
 #ifdef USE_SPI
     SPI.endTransaction();
-    digitalWrite(m_slaveSelectPin, HIGH);
 #endif
 
     if (!inISR()) {
@@ -160,8 +151,6 @@ uint8_t ISABus::read(
     if (!inISR()) {
         //noInterrupts();
     }
-
-    digitalWrite(m_slaveSelectPin, LOW);
 
 #ifdef USE_SPI
     SPI.beginTransaction(SPISettings(14000000, LSBFIRST, SPI_MODE0));
@@ -228,7 +217,6 @@ uint8_t ISABus::read(
     // Leave the clock pin in a low state
     digitalWrite(m_clockPin, LOW);
 #endif
-    digitalWrite(m_slaveSelectPin, HIGH);
 
     if (!inISR()) {
         //interrupts();

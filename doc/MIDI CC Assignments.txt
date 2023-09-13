@@ -7,12 +7,12 @@ CC#     Parameter
 4   X   Foot pedal (MSB)
 5   X   Portamento time (MSB)
 6   X   Data entry (MSB)
-7   -   Volume (MSB) (affect the sound generating operators)
+7   O   Volume (MSB) - affects only carriers
 8   X   Balance (MSB)
 9   O   Synthesis type (6 types, 0-22, increments of 21, 105-127 ?), perc? - TODO
 10  O   Pan (MSB) (0-42 left, 43-85 middle, 86-127 right)
 11  X   Expression (MSB)
-12  X   Effect controller 1 (MSB)
+12  O   Effect controller 1 / LFO start delay (MSB)
 13  X   Effect controller 2 (MSB)
 14  O   Op 1 velocity to level (MSB)
 15  O   Op 2 velocity to level (MSB)
@@ -22,12 +22,12 @@ CC#     Parameter
 19  O   Op 2 waveform select
 20  O   Op 3 waveform select
 21  O   Op 4 waveform select
-22  -   Tremolo depth (global)
+22  O   Tremolo depth - affects all channels
 23  O   Op 1 tremolo on
 24  O   Op 2 tremolo on
 25  O   Op 3 tremolo on
 26  O   Op 4 tremolo on
-27  -   Vibrato depth (global)
+27  O   Vibrato depth - affects all channels
 28  O   Op 1 vibrato on
 29  O   Op 2 vibrato on
 30  O   Op 3 vibrato on
@@ -66,12 +66,12 @@ CC#     Parameter
 62  X   - (LSB)
 63  X   - (LSB)
 
-64  -   Sustain (on/off)
+64  O   Sustain (on/off)
 65  -   Portamento (on/off)
-66  -   
-67  -   
-68  -   
-69  -   
+66  X   Sostenuto (on/off)
+67  X   Soft (on/off)
+68  X   Legato (on/off)
+69  X   Hold 2 (on/off)
 70  X   Sound controller 1 (sound variation)
 71  X   Sound controller 2 (VCF resonance)
 72  X   Sound controller 3 (VCA release time)
@@ -131,7 +131,3 @@ CC#     Parameter
 125 X   Omni on
 126 X   Mono mode
 127 X   Poly mode
-
-
-TODO:
-- LFO start delay (channel)

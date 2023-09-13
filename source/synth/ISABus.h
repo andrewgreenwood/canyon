@@ -30,12 +30,11 @@
     Originally this was written to use "bit-banging", it has since been updated
     to use SPI. The relevant pins to use are:
 
-    10 / SS   - Not used (is set as an OUTPUT)
     11 / MOSI - outputPin
     12 / MISO - inputPin
     13 / SCK  - clockPin
 
-    Eventually the above pins will be used implicitly by this component.
+    TODO: The above pins will be used implicitly by this component.
 */
 
 #ifndef ISABUS_H
@@ -52,7 +51,6 @@ class ISABus {
         ISABus(
             uint8_t outputPin,  // To first shift register's serial input (SER)
             uint8_t inputPin,   // From final shift register's serial output (Qh')
-            uint8_t slaveSelectPin, // SPI slave select
             uint8_t clockPin,   // Shift clock pin (SRCLK,SRCLK,CLK)
             uint8_t latchPin,   // Shift register store pin (RCLK,RCLK)
             uint8_t loadPin,    // To S1 pin of final shift register
@@ -72,7 +70,6 @@ class ISABus {
     private:
         unsigned m_outputPin    : 4;
         unsigned m_inputPin     : 4;
-        unsigned m_slaveSelectPin : 4;
         unsigned m_clockPin     : 4;
         unsigned m_latchPin     : 4;
         unsigned m_loadPin      : 4;
